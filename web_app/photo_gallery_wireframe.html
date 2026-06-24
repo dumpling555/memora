@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Gallery - UI Wireframe Prototype</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background:#0f172a; color:#e2e8f0; padding:40px;
+  }
+  h1 { text-align:center; margin-bottom:8px; font-size:28px; color:#fff; }
+  .subtitle { text-align:center; margin-bottom:40px; color:#64748b; font-size:14px; }
+  .section-title {
+    font-size:18px; font-weight:700; color:#60a5fa;
+    margin:40px 0 16px; padding-bottom:8px; border-bottom:2px solid #3b82f6;
+  }
+  .wrapper { max-width:1200px; margin:0 auto; }
+
+  /* Browser chrome */
+  .browser-bar {
+    background:#e2e8f0; padding:12px 16px; display:flex; align-items:center; gap:8px;
+    border-radius:16px 16px 0 0;
+  }
+  .browser-dots { display:flex; gap:6px; }
+  .browser-dots span { width:12px; height:12px; border-radius:50%; }
+  .browser-dots span:nth-child(1) { background:#ef4444; }
+  .browser-dots span:nth-child(2) { background:#f59e0b; }
+  .browser-dots span:nth-child(3) { background:#22c55e; }
+  .url-bar {
+    flex:1; background:#fff; border-radius:8px; padding:6px 12px;
+    font-size:13px; color:#64748b; border:1px solid #cbd5e1;
+  }
+
+  /* Wireframe card */
+  .wf-card { background:#f8fafc; border-radius:0 0 16px 16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
+
+  /* Header */
+  .header {
+    background:rgba(255,255,255,0.85); backdrop-filter:blur(12px);
+    border-bottom:1px solid #e2e8f0; padding:0 24px; height:64px;
+    display:flex; align-items:center; gap:16px;
+  }
+  .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:20px; color:#1e293b; }
+  .logo-icon {
+    width:32px; height:32px; background:#3b82f6; border-radius:8px;
+    display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px;
+  }
+  .search-area { flex:1; display:flex; align-items:center; gap:12px; max-width:600px; }
+  .folder-btn {
+    display:flex; align-items:center; gap:6px; padding:8px 14px;
+    background:rgba(255,255,255,0.7); border:1px solid #e2e8f0;
+    border-radius:999px; font-size:13px; color:#475569; white-space:nowrap;
+  }
+  .folder-btn .icon { color:#3b82f6; }
+  .search-input {
+    flex:1; padding:8px 14px 8px 36px; background:#f1f5f9;
+    border:none; border-radius:999px; font-size:14px; color:#334155; position:relative;
+  }
+  .search-icon {
+    position:absolute; left:14px; top:50%; transform:translateY(-50%);
+    color:#94a3b8; font-size:16px;
+  }
+
+  /* Main layout */
+  .main-layout { display:flex; gap:24px; padding:24px; min-height:600px; }
+  .photo-grid {
+    flex:1; display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
+  }
+  .photo-card-wf {
+    aspect-ratio:1; background:#e2e8f0; border-radius:12px;
+    position:relative; overflow:hidden; cursor:pointer; transition:transform 0.2s;
+  }
+  .photo-card-wf:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.1); }
+  .photo-card-wf .tags-overlay { position:absolute; top:6px; left:6px; display:flex; gap:4px; }
+  .photo-card-wf .tag-chip-wf {
+    background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px;
+    border-radius:999px; font-size:9px; font-weight:500;
+  }
+  .photo-card-wf .placeholder-icon {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    color:#94a3b8; font-size:28px; opacity:0.4;
+  }
+
+  /* Timeline sidebar */
+  .timeline-sidebar {
+    width:288px; background:#fff; border-radius:16px; border:1px solid #e2e8f0;
+    padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  }
+  .timeline-title {
+    font-size:11px; font-weight:700; color:#94a3b8;
+    text-transform:uppercase; letter-spacing:0.1em; margin-bottom:16px;
+  }
+  .timeline-group { margin-bottom:16px; }
+  .timeline-date { font-size:10px; font-weight:700; color:#94a3b8; margin-bottom:8px; margin-top:4px; }
+  .timeline-item-wf {
+    display:flex; align-items:center; gap:10px; padding:6px 0;
+    border-left:2px solid #e2e8f0; margin-left:4px; padding-left:14px;
+    position:relative;
+  }
+  .timeline-dot-wf {
+    position:absolute; left:-5px; top:10px; width:8px; height:8px;
+    background:#3b82f6; border-radius:50%; border:2px solid #fff;
+  }
+  .timeline-filename { font-size:12px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+
+  /* Modal preview */
+  .modal-preview {
+    max-width:1200px; margin:40px auto 0; background:rgba(0,0,0,0.85);
+    border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.4);
+    display:flex; flex-direction:column;
+  }
+  .modal-header { display:flex; justify-content:flex-end; padding:12px 16px; }
+  .modal-close-btn {
+    width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.1);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    font-size:20px; cursor:pointer;
+  }
+  .modal-body { display:flex; min-height:360px; }
+  .modal-img-area {
+    flex:1; background:#000; display:flex; align-items:center;
+    justify-content:center;
+  }
+  .modal-img-placeholder { color:#444; font-size:48px; opacity:0.3; }
+  .modal-info { width:320px; background:#fff; padding:24px; display:flex; flex-direction:column; gap:12px; }
+  .modal-info-title { font-size:18px; font-weight:700; color:#1e293b; }
+  .modal-info-desc { font-size:13px; color:#64748b; line-height:1.6; }
+  .modal-info-tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .modal-tag { padding:4px 12px; background:#f1f5f9; color:#475569; border-radius:999px; font-size:12px; }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    max-width:1200px; margin:0 auto; background:#0f172a;
+    border-radius:16px; padding:40px; box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .arch-row { display:flex; justify-content:center; gap:24px; margin-bottom:20px; flex-wrap:wrap; }
+  .arch-box {
+    border-radius:12px; padding:20px 28px; text-align:center; min-width:180px; border:2px solid;
+  }
+  .arch-box h4 { font-size:14px; font-weight:700; margin-bottom:4px; }
+  .arch-box p { font-size:11px; opacity:0.7; }
+  .arch-box.client { background:#1e3a5f; border-color:#3b82f6; color:#93c5fd; }
+  .arch-box.server { background:#1a3a2a; border-color:#22c55e; color:#86efac; }
+  .arch-box.db { background:#3a1a3a; border-color:#a855f7; color:#d8b4fe; }
+  .arch-box.storage { background:#3a2a1a; border-color:#f59e0b; color:#fcd34d; }
+  .arch-arrow { text-align:center; color:#64748b; font-size:20px; margin:4px 0; }
+  .arch-label { text-align:center; color:#64748b; font-size:11px; margin:2px 0 10px; }
+  .legend { max-width:1200px; margin:20px auto 0; display:flex; gap:24px; justify-content:center; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:#94a3b8; }
+  .legend-color { width:14px; height:14px; border-radius:4px; }
+
+  /* API table */
+  .api-table-wrapper {
+    max-width:1200px; margin:40px auto; background:#0f172a;
+    border-radius:16px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .api-table { width:100%; border-collapse:collapse; }
+  .api-table th { text-align:left; padding:10px 16px; font-size:12px; font-weight:700; color:#60a5fa; border-bottom:1px solid #1e293b; }
+  .api-table td { padding:10px 16px; font-size:13px; color:#cbd5e1; border-bottom:1px solid #1e293b; }
+  .api-table tr:last-child td { border-bottom:none; }
+  .api-method { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; font-family:monospace; }
+  .method-get { background:#1e3a5f; color:#60a5fa; }
+  .endpoint { font-family:monospace; color:#86efac; }
+  .method-desc { color:#94a3b8; font-size:12px; }
+
+  /* DB schema */
+  .schema-wrapper {
+    max-width:1200px; margin:20px auto; background:#0f172a;
+    border-radius:16px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .schema-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .schema-table th { text-align:left; padding:8px 14px; background:#1e293b; color:#a855f7; font-size:12px; font-weight:700; }
+  .schema-table td { padding:6px 14px; border-bottom:1px solid #1e293b; color:#cbd5e1; }
+  .schema-table td:first-child { font-family:monospace; color:#fcd34d; }
+  .schema-table td:nth-child(2) { font-family:monospace; color:#93c5fd; }
+
+  @media (max-width:900px) {
+    .photo-grid { grid-template-columns:repeat(3,1fr); }
+    .timeline-sidebar { display:none; }
+    .modal-body { flex-direction:column; }
+    .modal-info { width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<h1>&#127748; Photo Gallery Flask App</h1>
+<p class="subtitle">UI Wireframe Prototype &amp; System Architecture Diagram</p>
+
+<div class="wrapper">
+
+<!-- ==================== SECTION 1: MAIN PAGE WIREFRAME ==================== -->
+<div class="section-title">1. UI Wireframe — 主页面布局</div>
+<div class="wf-card">
+  <div class="browser-bar">
+    <div class="browser-dots"><span></span><span></span><span></span></div>
+    <div class="url-bar">http://localhost:5000</div>
+  </div>
+  <div class="header">
+    <div class="logo"><div class="logo-icon">&#9998;</div><span>Gallery</span></div>
+    <div class="search-area">
+      <div class="folder-btn"><span class="icon">&#128193;</span><span>printscreen</span><span>&#9660;</span></div>
+      <div style="position:relative;flex:1;">
+        <span class="search-icon">&#128269;</span>
+        <input class="search-input" type="text" placeholder="Search everything..." readonly>
+      </div>
+    </div>
+  </div>
+  <div class="main-layout">
+    <div class="photo-grid">
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">风景</span><span class="tag-chip-wf">夕阳</span></div><div class="placeholder-icon">&#127748;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">截图</span></div><div class="placeholder-icon">&#128444;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">文档</span><span class="tag-chip-wf">表格</span></div><div class="placeholder-icon">&#128196;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">美食</span></div><div class="placeholder-icon">&#127829;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">宠物</span></div><div class="placeholder-icon">&#128050;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">建筑</span></div><div class="placeholder-icon">&#127963;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">植物</span></div><div class="placeholder-icon">&#127796;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">人物</span></div><div class="placeholder-icon">&#128104;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">代码</span></div><div class="placeholder-icon">&#128187;</div></div>
+      <div class="photo-card-wf"><div class="tags-overlay"><span class="tag-chip-wf">旅行</span></div><div class="placeholder-icon">&#127959;</div></div>
+    </div>
+    <div class="timeline-sidebar">
+      <div class="timeline-title">Timeline</div>
+      <div class="timeline-group"><div class="timeline-date">2025年6月18日</div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">screenshot_001.png</span></div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">screenshot_002.png</span></div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">screenshot_003.png</span></div>
+      </div>
+      <div class="timeline-group"><div class="timeline-date">2025年6月17日</div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">photo_045.jpg</span></div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">photo_046.jpg</span></div>
+      </div>
+      <div class="timeline-group"><div class="timeline-date">2025年6月15日</div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">doc_screenshot.png</span></div>
+        <div class="timeline-item-wf"><div class="timeline-dot-wf"></div><span class="timeline-filename">chart_export.png</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 2: MODAL PREVIEW ==================== -->
+<div class="section-title">2. UI Wireframe — 图片详情弹窗</div>
+<div class="modal-preview">
+  <div class="modal-header"><div class="modal-close-btn">&#10005;</div></div>
+  <div class="modal-body">
+    <div class="modal-img-area"><div class="modal-img-placeholder">&#127748;</div></div>
+    <div class="modal-info">
+      <div class="modal-info-title">screenshot_001.png</div>
+      <div class="modal-info-desc">这是一张截图的AI识别概述描述，包含对图片内容的详细文字说明。通过AI模型对图片进行分析，提取关键信息和标签。</div>
+      <div class="modal-info-tags">
+        <span class="modal-tag">风景</span><span class="modal-tag">夕阳</span><span class="modal-tag">天空</span><span class="modal-tag">截图</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 3: ARCHITECTURE ==================== -->
+<div class="section-title" style="color:#fff; border-color:#3b82f6;">3. 系统架构</div>
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-box client"><h4>&#128187; 浏览器客户端</h4><p>HTML + Tailwind CSS + Vanilla JS</p></div>
+  </div>
+  <div class="arch-arrow">&#8595; &#8595;&#8595;&#8595; &#8593;</div>
+  <div class="arch-label">HTTP / JSON (REST API)</div>
+  <div class="arch-row">
+    <div class="arch-box server"><h4>&#128640; Flask Backend</h4><p>Python 3.x</p></div>
+    <div class="arch-box server" style="min-width:280px;">
+      <h4>路由层</h4>
+      <p style="font-family:monospace;font-size:11px;line-height:1.8;">GET /<br>GET /api/photos<br>GET /api/folders<br>GET /api/file/&lt;id&gt;</p>
+    </div>
+  </div>
+  <div class="arch-arrow">&#8595;</div>
+  <div class="arch-row">
+    <div class="arch-box db"><h4>&#128451; SQLite Database</h4><p>res.sqlite<br>image_analysis 表</p></div>
+    <div class="arch-box storage"><h4>&#128193; NAS 文件存储</h4><p>\\myDiskstation\photo\电脑\<br>各类文件夹</p></div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#3b82f6;"></div> 客户端</div>
+    <div class="legend-item"><div class="legend-color" style="background:#22c55e;"></div> Flask 服务层</div>
+    <div class="legend-item"><div class="legend-color" style="background:#a855f7;"></div> 数据层 (SQLite)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#f59e0b;"></div> 文件存储 (NAS)</div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 4: API TABLE ==================== -->
+<div class="section-title">4. API 接口</div>
+<div class="api-table-wrapper">
+  <table class="api-table">
+    <thead><tr><th>方法</th><th>端点</th><th>说明</th><th>参数</th></tr></thead>
+    <tbody>
+      <tr><td><span class="api-method method-get">GET</span></td><td class="endpoint">/</td><td class="method-desc">渲染主页 (index.html)</td><td>—</td></tr>
+      <tr><td><span class="api-method method-get">GET</span></td><td class="endpoint">/api/photos</td><td class="method-desc">获取照片列表，支持多文件夹筛选与全文搜索</td><td><span style="color:#fcd34d;">q</span> (搜索词), <span style="color:#fcd34d;">folder</span> (文件夹名, 可多选)</td></tr>
+      <tr><td><span class="api-method method-get">GET</span></td><td class="endpoint">/api/folders</td><td class="method-desc">从数据库动态提取所有文件夹名称及图片数量</td><td>—</td></tr>
+      <tr><td><span class="api-method method-get">GET</span></td><td class="endpoint">/api/file/&lt;id&gt;</td><td class="method-desc">根据照片ID返回原始图片文件</td><td><span style="color:#fcd34d;">photo_id</span> (路径参数)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== SECTION 5: DB SCHEMA ==================== -->
+<div class="section-title">5. 数据库表结构 (image_analysis)</div>
+<div class="schema-wrapper">
+  <table class="schema-table">
+    <thead><tr><th>字段名</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>id</td><td>主键 (INTEGER PRIMARY KEY)</td></tr>
+      <tr><td>file_name</td><td>文件名 (如 screenshot_001.png)</td></tr>
+      <tr><td>file_path</td><td>完整NAS路径 (如 \\myDiskstation\photo\电脑\printscreen\...)</td></tr>
+      <tr><td>overview</td><td>AI生成的图片内容概述</td></tr>
+      <tr><td>extracted_text</td><td>OCR提取的文本内容</td></tr>
+      <tr><td>other_info</td><td>其他AI分析信息</td></tr>
+      <tr><td>tags</td><td>标签 (逗号分隔, 如 风景,夕阳,天空)</td></tr>
+      <tr><td>width</td><td>图片宽度 (px)</td></tr>
+      <tr><td>height</td><td>图片高度 (px)</td></tr>
+      <tr><td>format</td><td>图片格式 (如 PNG, JPEG)</td></tr>
+      <tr><td>created_at</td><td>创建时间 (TIMESTAMP)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- /wrapper -->
+</body>
+</html>

@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Gallery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/theme.js"></script>
+    <style>
+        :root { --spring: cubic-bezier(0.16, 1, 0.3, 1); --spring-slow: cubic-bezier(0.22, 1, 0.36, 1); }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes modalOverlayIn { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(4px); } }
+        @keyframes modalCardIn { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        body {
+            background-color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .lang-btn { cursor: pointer; }
+        .lang-btn.active-lang { background: white; color: #2563eb; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+        html.dark .dark-hide { display: none; }
+        html.dark .dark-show { display: inline-block !important; }
+        html.dark body { background: #0f172a; color: #e2e8f0; }
+        html.dark .bg-white\/80 { background: rgba(30,41,59,0.8); }
+        html.dark .border-slate-200 { border-color: #334155; }
+        html.dark .text-slate-800 { color: #f1f5f9; }
+        html.dark .text-slate-500 { color: #94a3b8; }
+        html.dark .text-slate-400 { color: #64748b; }
+        html.dark .text-slate-600 { color: #cbd5e1; }
+        html.dark .bg-slate-100 { background: #1e293b; }
+        html.dark .hover\:text-blue-600:hover { color: #60a5fa; }
+        html.dark .timeline-glass { background: rgba(30,41,59,0.45); border-color: #334155; }
+        html.dark .tl-header:hover { background: rgba(59,130,246,.1); }
+        html.dark .tl-header.active { background: rgba(59,130,246,.15); color: #60a5fa; }
+        html.dark .tl-header.active .tl-badge { background: rgba(59,130,246,.15); color: #60a5fa; }
+        html.dark .tl-day-item:hover { background: rgba(59,130,246,.08); }
+        html.dark .tl-day-item.active { background: rgba(59,130,246,.13); color: #60a5fa; }
+        html.dark .tl-day-item.active .tl-badge { background: rgba(59,130,246,.15); color: #60a5fa; }
+        html.dark .modal-content .bg-white { background: #1e293b; }
+        html.dark .modal-content .text-slate-800 { color: #f1f5f9; }
+        html.dark .modal-content .text-slate-600 { color: #cbd5e1; }
+        html.dark .modal-content .bg-slate-100 { background: #0f172a; }
+        html.dark .lang-btn { color: #94a3b8; }
+        html.dark .lang-btn.active-lang { color: #60a5fa; }
+        html.dark #lang-indicator { background: #334155; }
+        .photo-card {
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .photo-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.15);
+        }
+        .tag-overlay {
+            position: absolute;
+            top: 0.5rem;
+            left: 0.5rem;
+            z-index: 10;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            pointer-events: none;
+        }
+        .tag-chip {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.65rem;
+            font-weight: 500;
+        }
+        .modal-content {
+            max-height: 85vh;
+            max-width: 90vw;
+        }
+        /* === Timeline === */
+        .timeline-glass {
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(226, 232, 240, 0.7);
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        .timeline-glass.collapsed #timeline-panel {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            padding-top: 0;
+            margin-top: 0;
+        }
+        #timeline-panel {
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+            overflow: hidden;
+        }
+        #tl-toggle-btn {
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #tl-toggle-btn.collapsed {
+            transform: rotate(180deg);
+        }
+        #timeline-container.collapsed .tl-children {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            overflow: hidden;
+            transition: none;
+        }
+        #timeline-container:not(.collapsed) .tl-children.open {
+            max-height: 1200px;
+            opacity: 1;
+        }
+        .tl-node {
+            user-select: none;
+        }
+        .tl-header {
+            cursor: pointer;
+            transition: background 0.18s ease, transform 0.18s ease;
+            border-radius: 0.5rem;
+        }
+        .tl-header:hover {
+            background: rgba(59, 130, 246, 0.08);
+            transform: translateX(3px);
+        }
+        .tl-header.active {
+            background: rgba(59, 130, 246, 0.13);
+            color: #2563eb;
+        }
+        .tl-header.active .tl-badge {
+            background: rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+        }
+        .tl-arrow {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 1.1em;
+        }
+        .tl-arrow.open {
+            transform: rotate(90deg);
+        }
+        .tl-children {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+        }
+        .tl-children.open {
+            max-height: 1200px;
+            opacity: 1;
+        }
+        .tl-badge {
+            font-size: 0.6rem;
+            padding: 1px 7px;
+            border-radius: 9999px;
+            background: rgba(148, 163, 184, 0.18);
+            color: #64748b;
+            font-weight: 500;
+        }
+        .tl-day-item {
+            cursor: pointer;
+            transition: background 0.12s ease, transform 0.12s ease, color 0.12s ease;
+            border-radius: 0.4rem;
+        }
+        .tl-day-item:hover {
+            background: rgba(59, 130, 246, 0.08);
+            transform: translateX(3px);
+        }
+        .tl-day-item.active {
+            background: rgba(59, 130, 246, 0.13);
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .tl-day-item.active .tl-badge {
+            background: rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+        }
+        #timeline-container {
+            scrollbar-width: thin;
+            scrollbar-color: #e2e8f0 transparent;
+        }
+        #timeline-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        #timeline-container::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+        #image-modal:not(.hidden) { animation: modalOverlayIn 0.3s ease; }
+        #image-modal:not(.hidden) .modal-content { animation: modalCardIn 0.4s var(--spring); }
+        button:active:not(:disabled) { transform: scale(0.97); }
+        #search-input { transition: all 0.25s var(--spring); }
+        #search-input:focus { transform: scale(1.01); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+        .photo-card { transition: transform 0.3s var(--spring), box-shadow 0.3s var(--spring); }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header / Search Bar -->
+    <header class="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4">
+            <div class="flex items-center gap-2 font-bold text-xl text-slate-800 shrink-0">
+                <i class="ri-image-2-line text-blue-500"></i>
+                <span data-i18n="app.gallery">Gallery</span>
+            </div>
+            <div class="flex-1 max-w-2xl relative flex items-center gap-2">
+                <div class="relative flex-1">
+                    <i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="search-input" data-i18n-placeholder="gallery.search" placeholder="Search everything..."
+                        class="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                    <a href="/admin/" class="text-sm text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1 mr-2">
+                        <i class="ri-settings-3-line"></i> Admin
+                    </a>
+                    <button onclick="logout()" class="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Logout">
+                        <i class="ri-logout-box-line text-lg"></i>
+                    </button>
+                    <div class="relative flex items-center bg-slate-100 rounded-lg p-0.5 text-xs">
+                        <div id="lang-indicator" class="absolute top-0.5 bottom-0.5 left-0.5 rounded-md bg-white shadow-sm transition-all duration-400" style="transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 0;"></div>
+                        <button onclick="switchLang('zh')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="zh" data-i18n-title="lang.zh">中</button>
+                        <button onclick="switchLang('ja')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="ja" data-i18n-title="lang.ja">日</button>
+                        <button onclick="switchLang('en')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="en" data-i18n-title="lang.en">EN</button>
+                    </div>
+                <button onclick="themeManager.toggle()" class="p-2 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors" title="Toggle theme">
+                    <i class="ri-sun-line text-lg dark-hide"></i>
+                    <i class="ri-moon-line text-lg dark-show hidden"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 lg:p-6 gap-6">
+
+        <!-- Photo Grid -->
+        <section class="flex-1">
+            <div id="photo-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+                <!-- Skeleton / Loading / Empty State -->
+                <div class="col-span-full text-center py-20 text-slate-400">
+                    <div class="animate-spin inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mb-4"></div>
+                    <p data-i18n="gallery.loading">Loading photos...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline Sidebar -->
+        <aside class="lg:w-64 shrink-0">
+            <div id="tl-glass" class="timeline-glass p-3.5 sticky top-20">
+                <div class="flex items-center justify-between mb-3 pl-0.5">
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="ri-calendar-line text-blue-400"></i> <span data-i18n="gallery.timeline">Timeline</span>
+                    </h3>
+                    <button id="tl-toggle-btn" class="text-slate-400 hover:text-slate-600 transition-colors p-0.5" data-i18n-title="gallery.timeline">
+                        <i class="ri-sidebar-fold-line text-base"></i>
+                    </button>
+                    <button id="tl-reset-btn" class="text-slate-400 hover:text-blue-500 transition-colors p-0.5" data-i18n-title="gallery.reset">
+                        <i class="ri-refresh-line text-base"></i>
+                    </button>
+                </div>
+                <div id="timeline-panel">
+                    <div id="timeline-container" class="max-h-[calc(100vh-210px)] overflow-y-auto pr-1">
+                        <!-- Timeline tree injected here -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+        <button id="close-modal" class="absolute top-6 right-6 text-white text-3xl hover:text-slate-300 transition-colors">
+            <i class="ri-close-line"></i>
+        </button>
+        <div class="modal-content flex flex-col md:flex-row bg-white rounded-2xl overflow-hidden shadow-2xl max-w-5xl">
+            <div class="flex-1 bg-black flex items-center justify-center">
+                <img id="modal-img" src="" alt="" class="max-h-[60vh] md:max-h-[80vh] object-contain">
+            </div>
+            <div class="w-full md:w-80 p-6 overflow-y-auto">
+                <h2 id="modal-title" class="font-bold text-lg text-slate-800 mb-2"></h2>
+                <p id="modal-desc" class="text-sm text-slate-600 leading-relaxed"></p>
+                <div id="modal-tags" class="mt-4 flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script>
+        let photos = [];
+        let timelineDates = [];
+        let currentYear = '';
+        let currentMonth = '';
+        let currentDay = '';
+        let monthDaysOpen = new Set();
+        let pageCursor = '';
+        let pageHasMore = false;
+        let isPaginationMode = true;
+        const PAGE_SIZE = 100;
+
+        // ========== Query params helper ==========
+        function buildParams() {
+            const params = new URLSearchParams();
+            const query = document.getElementById('search-input').value;
+            if (query) params.set('q', query);
+            if (currentYear && !currentMonth) params.set('year', currentYear);
+            if (currentMonth && !currentDay) params.set('month', currentMonth);
+            if (currentDay) params.set('date', currentDay);
+            return params;
+        }
+
+        // ========== Photos ==========
+        async function fetchPhotos(append = false) {
+            if (!append) {
+                pageCursor = '';
+                pageHasMore = false;
+            }
+            const params = buildParams();
+            const isAllMode = !params.has('folder') && !params.has('year') && !params.has('month') && !params.has('date');
+            isPaginationMode = !params.has('q') && isAllMode;
+            if (append) {
+                params.set('after', pageCursor);
+                params.set('limit', PAGE_SIZE);
+            } else if (isPaginationMode) {
+                params.set('limit', PAGE_SIZE);
+            }
+            try {
+                const resp = await fetch('/api/photos?' + params.toString());
+                const data = await resp.json();
+                pageHasMore = data.length === PAGE_SIZE;
+                if (data.length > 0) {
+                    const last = data[data.length - 1];
+                    pageCursor = last.created_at + '|' + last.id;
+                }
+                if (append) {
+                    photos = photos.concat(data);
+                    appendGrid(data);
+                } else {
+                    photos = data;
+                    renderGrid(data);
+                }
+            } catch (err) {
+                console.error('Error fetching photos:', err);
+            }
+        }
+
+        function renderGrid(data) {
+            const grid = document.getElementById('photo-grid');
+            if (data.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-400">
+                    <i class="ri-image-line text-5xl text-slate-300 mb-3 block"></i>
+                    <p class="text-base font-medium text-slate-400" data-i18n="gallery.no_photos">No photos found.</p>
+                </div>`;
+                return;
+            }
+            grid.innerHTML = data.map(photo => cardHtml(photo)).join('');
+        }
+
+        function appendGrid(data) {
+            const grid = document.getElementById('photo-grid');
+            // Remove the old loading spinner if any
+            const spinner = document.getElementById('page-spinner');
+            if (spinner) spinner.remove();
+            grid.insertAdjacentHTML('beforeend', data.map(photo => cardHtml(photo)).join(''));
+        }
+
+        function cardHtml(photo) {
+            return `<div class="photo-card aspect-square rounded-xl bg-slate-200 group cursor-pointer" onclick="openModal(${photo.id})">
+                <div class="tag-overlay">
+                    ${photo.tags ? photo.tags.split(',').map(t => `<span class="tag-chip">${t.trim()}</span>`).join('') : ''}
+                </div>
+                <img src="/api/thumb/${photo.id}?t=${Date.parse(photo.created_at) || photo.id}" class="w-full h-full object-cover"
+                     onerror="this.src='https://via.placeholder.com/400x400?text=Image+Not+Found'"
+                     alt="${photo.file_name}" loading="lazy">
+            </div>`;
+        }
+
+        // ========== Infinite Scroll ==========
+        let loadingMore = false;
+        document.addEventListener('scroll', () => {
+            if (loadingMore || !pageHasMore || !isPaginationMode) return;
+            const scrollBottom = window.innerHeight + window.scrollY;
+            const docHeight = document.documentElement.scrollHeight;
+            if (docHeight - scrollBottom < 600) {
+                loadingMore = true;
+                fetchPhotos(true).then(() => { loadingMore = false; }).catch(() => { loadingMore = false; });
+            }
+        });
+
+        // ========== Timeline ==========
+        document.getElementById('tl-toggle-btn').addEventListener('click', () => {
+            const container = document.getElementById('timeline-container');
+            container.classList.toggle('collapsed');
+            document.getElementById('tl-toggle-btn').classList.toggle('collapsed');
+            if (container.classList.contains('collapsed')) {
+                container.querySelectorAll('.tl-children.open, .tl-arrow.open').forEach(el => el.classList.remove('open'));
+            }
+        });
+
+        document.getElementById('tl-reset-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentYear = '';
+            currentMonth = '';
+            currentDay = '';
+            monthDaysOpen.clear();
+            document.getElementById('search-input').value = '';
+            // Collapse visually
+            const container = document.getElementById('timeline-container');
+            container.querySelectorAll('.tl-children.open, .tl-arrow.open').forEach(el => el.classList.remove('open'));
+            container.classList.add('collapsed');
+            document.getElementById('tl-toggle-btn').classList.add('collapsed');
+            fetchTimeline();
+            fetchPhotos();
+        });
+        async function fetchTimeline() {
+            try {
+                const resp = await fetch('/api/timeline?' + buildParams().toString());
+                timelineDates = await resp.json();
+                renderTimeline();
+            } catch (err) {
+                console.error('Error fetching timeline:', err);
+            }
+        }
+
+        function renderTimeline() {
+            const container = document.getElementById('timeline-container');
+            const isCollapsed = container.classList.contains('collapsed');
+            if (!timelineDates.length) {
+                container.innerHTML = '<p class="text-slate-400 text-xs text-center py-6"></p>';
+                return;
+            }
+
+            // Build tree: year -> month -> [days]
+            const tree = {};
+            timelineDates.forEach(d => {
+                const parts = d.split('-');
+                const y = parts[0], m = parts[1], day = parts[2];
+                if (!tree[y]) tree[y] = {};
+                if (!tree[y][m]) tree[y][m] = [];
+                tree[y][m].push(day);
+            });
+
+            const years = Object.keys(tree).sort().reverse();
+
+            container.innerHTML = years.map(y => {
+                const months = Object.keys(tree[y]).sort().reverse();
+                const yearActive = currentYear === y && !currentMonth ? ' active' : '';
+                const yearOpen = currentYear === y;
+                return `
+                    <div class="tl-node mb-0.5">
+                        <div class="tl-header flex items-center gap-1.5 px-2 py-1.5 text-sm font-semibold text-slate-700${yearActive}" data-year="${y}">
+                            <i class="ri-arrow-right-s-line tl-arrow text-slate-400${yearOpen ? ' open' : ''}"></i>
+                            <span>${y}</span>
+                        </div>
+                        <div class="tl-children ml-1 pl-2 border-l border-slate-200/60${yearOpen ? ' open' : ''}">
+                            ${months.map(m => {
+                                const days = tree[y][m].sort().reverse();
+                                const monthName = new Date(y, m - 1).toLocaleString('en', { month: 'short' });
+                                const monthKey = y + '-' + m;
+                                const monthActive = currentMonth === monthKey && !currentDay ? ' active' : '';
+                                const monthOpen = currentMonth === monthKey;
+                                // Days are open if: a day in this month is selected, or monthDaysOpen has this month
+                                const daysOpen = currentMonth === monthKey && (currentDay && currentDay.startsWith(monthKey) || monthDaysOpen.has(monthKey));
+                                return `
+                                    <div class="tl-node mb-0.5">
+                                        <div class="tl-header flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-500${monthActive}" data-month="${monthKey}" data-parent="${y}">
+                                            <i class="ri-arrow-right-s-line tl-arrow text-slate-400 text-xs${monthOpen ? ' open' : ''}"></i>
+                                            <span>${monthName}</span>
+                                        </div>
+                                        <div class="tl-children ml-1 pl-2 border-l border-slate-200/40${daysOpen ? ' open' : ''}">
+                                            ${days.map(d => {
+                                                const dateStr = y + '-' + m + '-' + d;
+                                                const active = dateStr === currentDay ? ' active' : '';
+                                                return `<div class="tl-day-item flex items-center gap-1.5 px-2 py-1 text-xs text-slate-500${active}" data-day="${dateStr}"><span class="opacity-40">${parseInt(d)}</span></div>`;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ========== Timeline click handler (delegated) ==========
+        document.getElementById('timeline-container').addEventListener('click', (e) => {
+            const yearEl = e.target.closest('[data-year]');
+            const monthEl = e.target.closest('[data-month]');
+            const dayEl = e.target.closest('[data-day]');
+            if (!yearEl && !monthEl && !dayEl) return;
+
+            // Auto-expand if collapsed
+            const container = document.getElementById('timeline-container');
+            if (container.classList.contains('collapsed')) {
+                container.classList.remove('collapsed');
+                document.getElementById('tl-toggle-btn').classList.remove('collapsed');
+            }
+
+            if (dayEl) {
+                const ds = dayEl.dataset.day;
+                if (currentDay === ds) {
+                    currentDay = '';
+                } else {
+                    currentDay = ds;
+                    currentMonth = ds.substring(0, 7);
+                    currentYear = ds.substring(0, 4);
+                    monthDaysOpen.add(currentMonth);
+                }
+                renderTimeline();
+                fetchPhotos();
+                return;
+            }
+
+            if (monthEl) {
+                const mk = monthEl.dataset.month;
+                if (currentMonth === mk && !currentDay) {
+                    // Same month: toggle days visibility only, keep filter
+                    if (monthDaysOpen.has(mk)) {
+                        monthDaysOpen.delete(mk);
+                    } else {
+                        monthDaysOpen.add(mk);
+                    }
+                } else {
+                    currentMonth = mk;
+                    currentYear = mk.substring(0, 4);
+                    currentDay = '';
+                    monthDaysOpen.add(mk);
+                    fetchPhotos();
+                }
+                renderTimeline();
+                return;
+            }
+
+            if (yearEl) {
+                const y = yearEl.dataset.year;
+                if (currentYear === y && !currentMonth && !currentDay) {
+                    // Deselect — go back to folder-only view
+                    currentYear = '';
+                    monthDaysOpen.clear();
+                } else {
+                    currentYear = y;
+                    currentMonth = '';
+                    currentDay = '';
+                    monthDaysOpen.clear();
+                }
+                renderTimeline();
+                fetchPhotos();
+            }
+        });
+
+        function openModal(id) {
+            const photo = photos.find(p => p.id === id);
+            if (!photo) return;
+
+            document.getElementById('modal-img').src = `/api/file/${photo.id}`;
+            document.getElementById('modal-title').textContent = photo.file_name;
+            document.getElementById('modal-desc').textContent = photo.overview || i18n.get('gallery.no_description');
+
+            const tagsContainer = document.getElementById('modal-tags');
+            tagsContainer.innerHTML = '';
+            if (photo.tags) {
+                photo.tags.split(',').forEach(t => {
+                    const span = document.createElement('span');
+                    span.className = 'px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full';
+                    span.textContent = t.trim();
+                    tagsContainer.appendChild(span);
+                });
+            }
+
+            const modal = document.getElementById('image-modal');
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('image-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        document.getElementById('close-modal').addEventListener('click', closeModal);
+        document.getElementById('search-input').addEventListener('input', () => {
+            fetchTimeline();
+            fetchPhotos();
+        });
+
+        // Close modal on click outside
+        document.getElementById('image-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'image-modal') closeModal();
+        });
+
+        // Language switching
+        function switchLang(lang) {
+            i18n.setLang(lang);
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.toggle('active-lang', btn.dataset.lang === lang);
+            });
+            updateLangIndicator(lang);
+        }
+
+        async function logout() {
+            await fetch('/api/logout');
+            window.location.href = '/';
+        }
+
+        function updateLangIndicator(lang) {
+            const indicator = document.getElementById('lang-indicator');
+            if (!indicator) return;
+            const btn = document.querySelector(`.lang-btn[data-lang="${lang}"]`);
+            if (!btn) return;
+            const container = indicator.parentElement;
+            const cRect = container.getBoundingClientRect();
+            const bRect = btn.getBoundingClientRect();
+            indicator.style.width = bRect.width + 'px';
+            indicator.style.transform = `translateX(${bRect.left - cRect.left}px)`;
+        }
+
+        // Initial Load
+        i18n.init();
+        themeManager.init();
+        updateLangIndicator(i18n.getLang());
+        fetchTimeline();
+        fetchPhotos();
+
+        // Listen for visibility changes from admin panel
+        let _lastVisVersion = '';
+        let _visCheckTimer = null;
+
+        function startVisibilityPolling() {
+            _visCheckTimer = setInterval(async () => {
+                try {
+                    const r = await fetch('/api/folder-visibility-version');
+                    const data = await r.json();
+                    if (_lastVisVersion && data.version && data.version !== _lastVisVersion) {
+                        fetchPhotos();
+                    }
+                    _lastVisVersion = data.version || '';
+                } catch(e) {}
+            }, 3000);
+        }
+
+        // Fetch initial version, then start polling
+        fetch('/api/folder-visibility-version')
+            .then(r => r.json())
+            .then(d => { _lastVisVersion = d.version || ''; })
+            .catch(() => {})
+            .then(() => startVisibilityPolling());
+
+        // Also try BroadcastChannel for same-browser tabs
+        try {
+            const bc = new BroadcastChannel('gallery-admin');
+            bc.addEventListener('message', (e) => {
+                if (e.data && e.data.type === 'folder-visibility-changed') {
+                    fetchPhotos();
+                    fetchPhotos();
+                }
+            });
+        } catch(e) { /* BroadcastChannel not supported */ }
+    </script>
+</body>
+</html>

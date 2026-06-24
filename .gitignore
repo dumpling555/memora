@@ -1,0 +1,66 @@
+# Database
+*.sqlite
+*.sqlite3
+*.db
+res.sqlite-shm
+res.sqlite-wal
+
+# Thumbnails / cache
+web_app/cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kilo plans
+.kilo/
+
+# Debug / temp / dev scripts
+debug_*.py
+debug_query.py
+analyze_*.py
+generate_*.py
+gen_*.py
+update_*.py
+fix_*.py
+regenerate_*.py
+
+# Architecture diagrams (generated)
+architecture*.png
+dataflow.png
+module_relation.png
+architecture*.md
+architecture_mermaid.md
+PERFORMANCE_REPORT.md
+
+# Package lock (not needed for Python-only)
+package-lock.json
+
+# Task experience / analysis logs
+TASK_EXPERIENCE.md
+analysis_execution_log.md
+solution.md
+docx_content.txt

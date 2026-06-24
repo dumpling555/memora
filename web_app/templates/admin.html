@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Gallery Admin</title>
+<script src="/static/js/tailwind.js"></script>
+<link rel="stylesheet" href="/static/css/remixicon.css">
+<style>
+:root { --spring: cubic-bezier(0.16, 1, 0.3, 1); --spring-slow: cubic-bezier(0.22, 1, 0.36, 1); }
+body { background: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; }
+.tab-btn { transition: all 0.15s ease; }
+.tab-btn.active { background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.toast { animation: slideIn 0.25s ease, fadeOut 0.3s ease 2.7s forwards; }
+@keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateY(-5px); } }
+.modal-overlay { background: rgba(0,0,0,.4); backdrop-filter: blur(2px); }
+.toggle-slider { display: inline-flex; }
+#scheduler-toggle:checked + .toggle-slider { background: #2563eb; }
+#scheduler-toggle:checked + .toggle-slider .toggle-knob { transform: translateX(20px); }
+.scan-status { transition: all 0.3s ease; }
+.source-toggle + .toggle-slider,
+.sched-toggle + .toggle-slider { background: #cbd5e1; }
+.source-toggle:checked + .toggle-slider,
+.sched-toggle:checked + .toggle-slider { background: #2563eb; }
+.source-toggle:checked + .toggle-slider .toggle-knob,
+.sched-toggle:checked + .toggle-slider .toggle-knob { transform: translateX(20px); }
+.folder-tree ul { margin-left: 1.2rem; border-left: 1px solid #e2e8f0; padding-left: 0.5rem; }
+.folder-tree li { list-style: none; }
+.folder-toggle { cursor: pointer; user-select: none; }
+.folder-toggle:hover { background: rgba(59,130,246,.06); border-radius: 0.25rem; }
+.glass-select { background: rgba(255,255,255,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.7); color: #334155; transition: all 0.2s ease; }
+.glass-select:hover { background: rgba(255,255,255,0.7); border-color: #93c5fd; }
+.glass-select:focus { background: rgba(255,255,255,0.85); border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.15); outline: none; }
+.glass-select option { background: white; color: #1e293b; }
+.lang-btn { cursor: pointer; }
+.lang-btn.active-lang { background: white; color: #2563eb; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+html.dark .dark-hide { display: none; }
+html.dark .dark-show { display: inline-block !important; }
+html.dark body { background: #0f172a; color: #e2e8f0; }
+html.dark .tab-btn { color: #94a3b8; }
+html.dark .tab-btn.active { background: rgba(30,41,59,0.8); color: #60a5fa; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+html.dark .bg-white\/60, html.dark .bg-white\/50, html.dark .bg-white\/80 { background: rgba(30,41,59,0.6); }
+html.dark .border-white\/70, html.dark .border-slate-100, html.dark .border-slate-200 { border-color: #334155; }
+html.dark .text-slate-700 { color: #e2e8f0; }
+html.dark .text-slate-800 { color: #f1f5f9; }
+html.dark .text-slate-600 { color: #cbd5e1; }
+html.dark .text-slate-500 { color: #94a3b8; }
+html.dark .text-slate-400 { color: #64748b; }
+html.dark .bg-slate-50\/80 { background: rgba(30,41,59,0.4); }
+html.dark .bg-slate-100 { background: #1e293b; }
+html.dark .divide-slate-100 > * { border-color: #334155; }
+html.dark .hover\:bg-slate-50\/50:hover { background: rgba(30,41,59,0.3); }
+html.dark .text-blue-500 { color: #60a5fa; }
+html.dark .text-blue-600 { color: #93c5fd; }
+html.dark .hover\:text-blue-600:hover { color: #60a5fa; }
+html.dark .hover\:text-blue-700:hover { color: #93c5fd; }
+html.dark .modal-overlay { background: rgba(0,0,0,.7); }
+html.dark #add-source-modal .bg-white { background: #1e293b; }
+html.dark #add-source-modal .border-slate-100 { border-color: #334155; }
+html.dark #add-source-modal .text-slate-800 { color: #f1f5f9; }
+html.dark #add-source-modal .text-slate-600 { color: #cbd5e1; }
+html.dark #add-source-modal .bg-slate-50 { background: #0f172a; }
+html.dark #add-source-modal input { background: #0f172a; border-color: #475569; color: #e2e8f0; }
+html.dark .glass-select { background: rgba(30,41,59,0.5); color: #cbd5e1; border-color: #475569; }
+html.dark .glass-select option { background: #1e293b; color: #e2e8f0; }
+html.dark .folder-tree ul { border-color: #334155; }
+html.dark .fv-row .text-amber-500 { color: #fbbf24; }
+html.dark .hover\:bg-blue-50:hover { background: rgba(59,130,246,.1); }
+html.dark .hover\:bg-amber-50:hover { background: rgba(251,191,36,.1); }
+html.dark .hover\:bg-red-50:hover { background: rgba(239,68,68,.1); }
+html.dark #scan-conflict-modal .bg-white\/80 { background: rgba(30,41,59,0.8); }
+html.dark #scan-conflict-modal .bg-white\/60 { background: rgba(15,23,42,0.6); }
+html.dark #confirm-modal .bg-white\/80 { background: rgba(30,41,59,0.8); }
+html.dark #confirm-modal .text-slate-800 { color: #f1f5f9; }
+html.dark #confirm-modal .text-slate-500 { color: #94a3b8; }
+html.dark #confirm-modal .bg-white\/70 { background: rgba(15,23,42,0.7); border-color: #475569; color: #cbd5e1; }
+html.dark #confirm-modal .hover\:bg-white:hover { background: rgba(30,41,59,0.9); }
+html.dark .sticky { background: rgba(30,41,59,0.6); }
+html.dark .lang-btn { color: #94a3b8; }
+html.dark #lang-indicator { background: #334155; }
+html.dark .lang-btn.active-lang { color: #60a5fa; }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes modalOverlayIn { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(4px); } }
+@keyframes modalCardIn { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; animation: fadeSlideIn 0.3s var(--spring); }
+#add-source-modal:not(.hidden), #scan-conflict-modal:not(.hidden), #confirm-modal:not(.hidden) { animation: modalOverlayIn 0.3s ease; }
+#add-source-modal:not(.hidden) > div, #scan-conflict-modal:not(.hidden) > div, #confirm-modal:not(.hidden) > div { animation: modalCardIn 0.4s var(--spring); }
+button:active:not(:disabled) { transform: scale(0.97); }
+.toggle-knob { transition: transform 0.4s var(--spring); }
+.toast { animation: slideIn 0.35s var(--spring), fadeOut 0.3s ease 2.7s forwards; }
+.overflow-y-auto, .tab-panel { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <i class="ri-settings-3-line text-blue-500"></i> <span data-i18n="app.admin">Admin</span>
+            </h1>
+            <p class="text-sm text-slate-500 mt-0.5" data-i18n="app.admin.desc">Media sources, folder visibility, and scan scheduling</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="relative flex items-center bg-slate-100 rounded-lg p-0.5 text-xs">
+                <div id="lang-indicator" class="absolute top-0.5 bottom-0.5 left-0.5 rounded-md bg-white shadow-sm transition-all duration-400" style="transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 0;"></div>
+                <button onclick="switchLang('zh')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="zh" data-i18n-title="lang.zh">中</button>
+                <button onclick="switchLang('ja')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="ja" data-i18n-title="lang.ja">日</button>
+                <button onclick="switchLang('en')" class="relative px-2 py-1 rounded-md font-medium lang-btn z-10" data-lang="en" data-i18n-title="lang.en">EN</button>
+            </div>
+            <button onclick="themeManager.toggle()" class="p-2 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors" title="Toggle theme">
+                <i class="ri-sun-line text-lg dark-hide"></i>
+                <i class="ri-moon-line text-lg dark-show hidden"></i>
+            </button>
+            <button onclick="logout()" class="p-2 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Logout">
+                <i class="ri-logout-box-line text-lg"></i>
+            </button>
+            <a href="/" class="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                <i class="ri-arrow-left-s-line"></i> <span data-i18n="app.back">Back to Gallery</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="flex gap-1 mb-6 bg-white/50 backdrop-blur-xl rounded-xl p-1 shadow-sm border border-white/70">
+        <button class="tab-btn active flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 flex items-center justify-center gap-1.5" data-tab="sources">
+            <i class="ri-database-2-line"></i> <span data-i18n="tab.sources">Media Sources</span>
+        </button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 flex items-center justify-center gap-1.5" data-tab="folders">
+            <i class="ri-folder-2-line"></i> <span data-i18n="tab.folders">Folder Visibility</span>
+        </button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 flex items-center justify-center gap-1.5" data-tab="scheduler">
+            <i class="ri-time-line"></i> <span data-i18n="tab.scheduler">Scheduler</span>
+        </button>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: Media Sources -->
+    <!-- ============================================================ -->
+    <div id="tab-sources" class="tab-panel active">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-slate-700"><i class="ri-database-2-line text-blue-500 mr-1"></i> <span data-i18n="sources.title">Media Sources</span></h2>
+            <button onclick="showAddSourceModal()" class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1">
+                <i class="ri-add-line"></i> <span data-i18n="sources.add">Add Source</span>
+            </button>
+        </div>
+        <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-wider">
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.id">ID</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.name">Name</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.root_path">Root Path</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.status">Status</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.connectivity">Connectivity</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="sources.actions">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="sources-tbody" class="divide-y divide-slate-100">
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400" data-i18n="loading.sources">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: Folder Visibility -->
+    <!-- ============================================================ -->
+    <div id="tab-folders" class="tab-panel">
+        <div class="flex items-center gap-4 mb-4">
+            <h2 class="text-lg font-semibold text-slate-700"><i class="ri-folder-2-line text-blue-500 mr-1"></i> <span data-i18n="folders.title">Folder Visibility</span></h2>
+            <button onclick="loadFolderTree()" class="px-3 py-1.5 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
+                <i class="ri-refresh-line"></i> <span data-i18n="folders.refresh">Refresh</span>
+            </button>
+        </div>
+        <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 p-4 min-h-[200px]">
+            <div id="fv-tree-container" class="folder-tree text-sm text-slate-600">
+                <p class="text-slate-400 text-center py-8"><i class="ri-loader-4-line animate-spin"></i> <span data-i18n="folders.loading">Loading folders...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 3: Scheduler -->
+    <!-- ============================================================ -->
+    <div id="tab-scheduler" class="tab-panel">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-slate-700"><i class="ri-time-line text-blue-500 mr-1"></i> <span data-i18n="scheduler.title">Scheduler Settings</span></h2>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <span class="text-sm text-slate-500" data-i18n="scheduler.enable">Enable scheduler</span>
+                <input type="checkbox" id="scheduler-toggle" class="hidden" onchange="toggleScheduler()">
+                <span class="toggle-slider w-10 h-5 bg-slate-300 rounded-full relative transition-colors duration-200">
+                    <span class="toggle-knob absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></span>
+                </span>
+            </label>
+        </div>
+        <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-wider">
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.source">Source</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.interval">Interval (minutes)</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.active">Active</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.last_run">Last Run</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.next_run">Next Run</span></th>
+                            <th class="text-left px-4 py-3 font-medium"><span data-i18n="scheduler.actions">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedules-tbody" class="divide-y divide-slate-100">
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400" data-i18n="loading.schedules">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Add Source Modal -->
+<!-- ============================================================ -->
+<div id="add-source-modal" class="fixed inset-0 z-50 hidden modal-overlay flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800" id="source-modal-title" data-i18n="modal.add_source">Add Media Source</h3>
+            <button onclick="closeModal('add-source-modal')" class="text-slate-400 hover:text-slate-600"><i class="ri-close-line text-xl"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-600 mb-1" data-i18n="modal.name">Name</label>
+                <input id="source-name" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. MyDiskStation Photos">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-600 mb-1" data-i18n="modal.root_path">Root Path</label>
+                <input id="source-path" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="e.g. \\server\share\folder">
+                <p class="text-xs text-slate-400 mt-1" data-i18n="modal.path_hint">UNC path to the media directory on your NAS / SMB share.</p>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+            <div id="test-result" class="text-sm"></div>
+            <div class="flex gap-2">
+                <button onclick="testSourceConnectivity()" class="px-3 py-1.5 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1">
+                    <i class="ri-link"></i> <span data-i18n="modal.test">Test</span>
+                </button>
+                <button onclick="saveSource()" class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"><span data-i18n="modal.save">Save</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Conflict Glass Modal -->
+<div id="scan-conflict-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);">
+    <div class="bg-white/80 backdrop-blur-2xl border border-white/40 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div class="px-6 py-5">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-500">
+                    <i class="ri-alert-line text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-slate-800" data-i18n="scan.conflict_title">Scan Already in Progress</h3>
+                    <p class="text-sm text-slate-500" data-i18n="scan.conflict_desc">A scan is currently running for this source.</p>
+                </div>
+            </div>
+            <div class="bg-white/60 rounded-xl p-4 text-sm space-y-2 mb-4">
+                <div class="flex justify-between">
+                    <span class="text-slate-500" data-i18n="scan.conflict_source">Source</span>
+                    <span class="font-medium text-slate-700" id="scan-conflict-source"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500" data-i18n="scan.conflict_id">Scan ID</span>
+                    <span class="font-mono text-slate-600" id="scan-conflict-id"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500" data-i18n="scan.conflict_started">Started at</span>
+                    <span class="text-slate-600" id="scan-conflict-started"></span>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('scan-conflict-modal').classList.add('hidden')" class="px-4 py-2 bg-white/70 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-white transition-colors"><span data-i18n="scan.close">Close</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Glass Modal -->
+<div id="confirm-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);">
+    <div class="bg-white/80 backdrop-blur-2xl border border-white/40 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="px-6 py-5">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
+                    <i class="ri-delete-bin-line text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-slate-800" id="confirm-title">Delete this schedule?</h3>
+                    <p class="text-sm text-slate-500" id="confirm-desc">This action cannot be undone.</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeConfirmModal()" class="px-4 py-2 bg-white/70 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-white transition-colors">Cancel</button>
+                <button id="confirm-btn" class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/i18n.js"></script>
+<script src="/static/js/theme.js"></script>
+<script>
+// ================================
+// Toast helper
+// ================================
+function showToast(message, type='success') {
+    const container = document.getElementById('toast-container');
+    const colors = { success: 'bg-green-50 border-green-200 text-green-700', error: 'bg-red-50 border-red-200 text-red-700', info: 'bg-blue-50 border-blue-200 text-blue-700' };
+    const icons = { success: 'ri-checkbox-circle-line', error: 'ri-error-warning-line', info: 'ri-information-line' };
+    const el = document.createElement('div');
+    el.className = `toast flex items-center gap-2 px-4 py-2.5 rounded-lg border ${colors[type] || colors.info} shadow-sm text-sm`;
+    el.innerHTML = `<i class="${icons[type] || icons.info}"></i> ${message}`;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+}
+
+function switchLang(lang) {
+    i18n.setLang(lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active-lang', btn.dataset.lang === lang);
+    });
+}
+
+async function logout() {
+    await fetch('/api/logout');
+    window.location.href = '/';
+}
+
+function updateLangIndicator(lang) {
+    const indicator = document.getElementById('lang-indicator');
+    if (!indicator) return;
+    const btn = document.querySelector(`.lang-btn[data-lang="${lang}"]`);
+    if (!btn) return;
+    const container = indicator.parentElement;
+    const cRect = container.getBoundingClientRect();
+    const bRect = btn.getBoundingClientRect();
+    indicator.style.width = bRect.width + 'px';
+    indicator.style.transform = `translateX(${bRect.left - cRect.left}px)`;
+}
+
+// ================================
+// Tab switching
+// ================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        // Lazy load data for specific tabs
+        if (btn.dataset.tab === 'folders') { loadFolderTree(); }
+        if (btn.dataset.tab === 'scheduler') loadSchedules();
+    });
+});
+
+// ================================
+// TAB 1: Media Sources
+// ================================
+let sourcesData = [];
+let editingSourceId = null;
+
+async function loadSources() {
+    try {
+        const r = await fetch('/admin/api/sources');
+        sourcesData = await r.json();
+        const tbody = document.getElementById('sources-tbody');
+        if (!sourcesData.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-10 text-center text-slate-400">' + i18n.get('empty.sources') + '</td></tr>';
+            return;
+        }
+        tbody.innerHTML = sourcesData.map(s => `
+            <tr class="hover:bg-slate-50/50">
+                <td class="px-4 py-3 text-slate-400 text-xs font-mono">${s.id}</td>
+                <td class="px-4 py-3 font-medium text-slate-700">${esc(s.name)}</td>
+                <td class="px-4 py-3 text-xs font-mono text-slate-500 max-w-[400px] truncate" title="${esc(s.root_path)}">${esc(s.root_path)}</td>
+                <td class="px-4 py-3">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" class="hidden source-toggle" data-id="${s.id}" ${s.is_active ? 'checked' : ''} onchange="toggleSourceStatus(${s.id}, this.checked)">
+                        <span class="toggle-slider w-10 h-5 rounded-full relative transition-colors duration-200">
+                            <span class="toggle-knob absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></span>
+                        </span>
+                    </label>
+                </td>
+                <td class="px-4 py-3"><span class="connectivity-${s.id} text-xs text-slate-400"><i class="ri-loader-4-line animate-spin"></i> Checking...</span></td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="triggerScan(${s.id})" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Quick scan"><i class="ri-play-circle-line"></i></button>
+                        <button onclick="editSource(${s.id})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded hover:bg-amber-50" title="Edit"><i class="ri-pencil-line"></i></button>
+                        <button onclick="deleteSource(${s.id})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+        // Check connectivity for each source
+        sourcesData.forEach(s => checkConnectivity(s.id));
+    } catch (e) {
+        console.error(e);
+        document.getElementById('sources-tbody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ' + e.message + '</td></tr>';
+    }
+}
+
+function showAddSourceModal() {
+    editingSourceId = null;
+    document.getElementById('source-modal-title').textContent = i18n.get('modal.add_source');
+    document.getElementById('source-name').value = '';
+    document.getElementById('source-path').value = '';
+    document.getElementById('test-result').innerHTML = '';
+    document.getElementById('add-source-modal').classList.remove('hidden');
+}
+
+function editSource(id) {
+    const s = sourcesData.find(x => x.id === id);
+    if (!s) return;
+    editingSourceId = id;
+    document.getElementById('source-modal-title').textContent = i18n.get('modal.edit_source');
+    document.getElementById('source-name').value = s.name;
+    document.getElementById('source-path').value = s.root_path;
+    document.getElementById('test-result').innerHTML = '';
+    document.getElementById('add-source-modal').classList.remove('hidden');
+}
+
+async function testSourceConnectivity() {
+    const path = document.getElementById('source-path').value.trim();
+    const resultEl = document.getElementById('test-result');
+    if (!path) { resultEl.innerHTML = '<span class="text-red-500">Enter a path first</span>'; return; }
+    resultEl.innerHTML = '<span class="text-slate-400"><i class="ri-loader-4-line animate-spin"></i> Testing...</span>';
+
+    try {
+        // If editing an existing source, test the saved path directly; otherwise use a temporary test endpoint
+        let targetId = editingSourceId;
+        if (!targetId) {
+            // Create a temporary test — we use root_path query param
+            const resp = await fetch('/admin/api/sources/test-connectivity?path=' + encodeURIComponent(path));
+            const data = await resp.json();
+            if (data.ok) {
+                resultEl.innerHTML = `<span class="text-green-600"><i class="ri-check-line"></i> ${esc(data.message)}</span>`;
+            } else {
+                resultEl.innerHTML = `<span class="text-red-500"><i class="ri-close-line"></i> ${esc(data.message)}</span>`;
+            }
+            return;
+        }
+
+        const resp = await fetch(`/admin/api/sources/${targetId}/test`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            resultEl.innerHTML = `<span class="text-green-600"><i class="ri-check-line"></i> ${esc(data.message)}</span>`;
+        } else {
+            resultEl.innerHTML = `<span class="text-red-500"><i class="ri-close-line"></i> ${esc(data.message)}</span>`;
+        }
+    } catch (e) {
+        resultEl.innerHTML = `<span class="text-red-500">Error: ${e.message}</span>`;
+    }
+}
+
+async function saveSource() {
+    const name = document.getElementById('source-name').value.trim();
+    const root_path = document.getElementById('source-path').value.trim();
+
+    if (!name || !root_path) { showToast('Name and path are required', 'error'); return; }
+
+    try {
+        let resp;
+        if (editingSourceId) {
+            resp = await fetch(`/admin/api/sources/${editingSourceId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, root_path})
+            });
+        } else {
+            resp = await fetch('/admin/api/sources', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, root_path, is_active: 1})
+            });
+        }
+        if (!resp.ok) {
+            const err = await resp.json();
+            showToast(err.error || 'Failed to save', 'error');
+            return;
+        }
+        closeModal('add-source-modal');
+        showToast(editingSourceId ? 'Source updated' : 'Source added');
+        loadSources();
+        } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function deleteSource(id) {
+    showConfirmModal('Delete this media source?', 'This will also remove folder visibility settings and schedules for this source.', async () => {
+        try {
+            const resp = await fetch(`/admin/api/sources/${id}`, { method: 'DELETE' });
+            if (!resp.ok) { showToast('Failed to delete', 'error'); return; }
+            showToast('Source deleted');
+            loadSources();
+            } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    });
+}
+async function checkConnectivity(id) {
+    try {
+        const resp = await fetch(`/admin/api/sources/${id}/test`, { method: 'POST' });
+        const data = await resp.json();
+        const el = document.querySelector(`.connectivity-${id}`);
+        if (el) {
+            if (data.ok) {
+                el.innerHTML = '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full"><i class="ri-check-line"></i> Connected</span>';
+            } else {
+                el.innerHTML = '<span class="text-xs px-2 py-0.5 bg-red-100 text-red-500 rounded-full"><i class="ri-close-line"></i> Unreachable</span>';
+            }
+        }
+    } catch (e) {
+        const el = document.querySelector(`.connectivity-${id}`);
+        if (el) el.innerHTML = '<span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full">Error</span>';
+    }
+}
+
+async function triggerScan(id) {
+    const s = sourcesData.find(x => x.id === id);
+    if (!s) return;
+
+    // Check for active scans first
+    try {
+        const activeResp = await fetch('/admin/api/scan/active');
+        const active = await activeResp.json();
+        const sameSource = active.find(a => a.media_source_id === id);
+        if (sameSource) {
+            showScanConflictModal(s.name, sameSource);
+            return;
+        }
+    } catch (e) {
+        // fall through — let the 409 handle it
+    }
+
+    try {
+        const resp = await fetch(`/admin/api/scan/${id}?mode=incremental`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.status === 409) {
+            showToast('Scan already in progress', 'info');
+            return;
+        }
+        showToast(`Quick scan started for "${s.name}"`, 'success');
+    } catch (e) {
+        showToast('Failed to start scan: ' + e.message, 'error');
+    }
+}
+
+function showScanConflictModal(sourceName, activeScan) {
+    const modal = document.getElementById('scan-conflict-modal');
+    document.getElementById('scan-conflict-source').textContent = sourceName;
+    document.getElementById('scan-conflict-id').textContent = activeScan.id;
+    document.getElementById('scan-conflict-started').textContent = activeScan.started_at || 'unknown';
+    modal.classList.remove('hidden');
+}
+
+async function toggleSourceStatus(id, active) {
+    try {
+        const resp = await fetch(`/admin/api/sources/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({is_active: active ? 1 : 0})
+        });
+        if (!resp.ok) {
+            showToast('Failed to update status', 'error');
+            return;
+        }
+        showToast(active ? 'Source activated' : 'Source deactivated');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ================================
+// TAB 2: Folder Visibility
+// ================================
+// Stores parsed tree data for the currently loaded source
+let _fvData = { sourceId: null, sourceName: '', paths: {} };
+
+async function loadFolderTree() {
+    const container = document.getElementById('fv-tree-container');
+    container.innerHTML = '<p class="text-slate-400 text-center py-8"><i class="ri-loader-4-line animate-spin"></i> ' + i18n.get('folders.loading') + '</p>';
+
+    try {
+        // Auto-detect first active source
+        const srcResp = await fetch('/admin/api/sources');
+        const allSources = await srcResp.json();
+        const activeSources = allSources.filter(s => s.is_active);
+        if (!activeSources.length) {
+            container.innerHTML = '<p class="text-slate-400 text-center py-8">' + i18n.get('empty.active_sources') + '</p>';
+            return;
+        }
+
+        // Render tabs for each active source
+        let html = '';
+        for (const source of activeSources) {
+            const resp = await fetch(`/admin/api/folders/${source.id}`);
+            const data = await resp.json();
+
+            if (!data.tree || !data.tree.length) {
+                html += `<div class="mb-4"><h3 class="text-sm font-semibold text-slate-700 mb-2">${esc(source.name)}</h3><p class="text-xs text-slate-400">${i18n.get('empty.folders')}</p></div>`;
+                continue;
+            }
+
+            // Store paths for this source in _fvData
+            if (!_fvData.paths[source.id]) {
+                _fvData.paths[source.id] = {};
+            }
+            (function collect(tree, paths) {
+                tree.forEach(n => {
+                    paths[n.path] = n;
+                    if (n.children) collect(n.children, paths);
+                });
+            })(data.tree, _fvData.paths[source.id]);
+
+            // Activate the first source by default
+            if (!_fvData.sourceId) {
+                _fvData.sourceId = source.id;
+                _fvData.sourceName = source.name;
+            }
+
+            html += `<div class="mb-4">
+                <h3 class="text-sm font-semibold text-slate-700 mb-1">${esc(source.name)}</h3>
+                ${renderTreeHTML(data.tree, 0, source.id)}
+            </div>`;
+        }
+
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`;
+    }
+}
+
+function renderTreeHTML(nodes, level, sourceId) {
+    const hidden = level > 0;
+    return '<ul' + (hidden ? ' class="hidden"' : '') + '>' + nodes.map(n => {
+        const hasChildren = n.children && n.children.length;
+        const h = n.is_hidden;
+        return `<li>
+            <div class="fv-row flex items-center gap-2 px-2 py-1.5 rounded ${hasChildren ? 'has-children' : ''}" style="padding-left: ${8 + level * 20}px" data-source-id="${sourceId}" data-path="${esc(n.path.replace(/\\/g, '/'))}">
+                ${hasChildren ? '<i class="ri-arrow-right-s-line text-slate-400 text-sm transition-transform"></i>' : '<span class="w-4"></span>'}
+                <i class="${h ? 'ri-folder-3-line text-slate-300' : 'ri-folder-3-line text-amber-500'} fv-folder-icon text-sm"></i>
+                <span class="${h ? 'flex-1 text-slate-400' : 'flex-1 text-slate-700'} fv-name">${esc(n.name)}</span>
+                <span class="text-xs text-slate-400">${n.count}</span>
+                <button class="fv-eye-btn p-1 rounded hover:bg-blue-50 transition-colors" title="${h ? 'Show' : 'Hide'}">
+                    <i class="${h ? 'ri-eye-off-line text-slate-300' : 'ri-eye-line text-blue-500'} text-sm"></i>
+                </button>
+            </div>
+            ${hasChildren ? renderTreeHTML(n.children, level + 1, sourceId) : ''}
+        </li>`;
+    }).join('') + '</ul>';
+}
+
+// Delegated click handler for folder tree
+document.getElementById('fv-tree-container').addEventListener('click', (e) => {
+    const eyeBtn = e.target.closest('.fv-eye-btn');
+    if (eyeBtn) {
+        toggleFolderVisibility(eyeBtn);
+        return;
+    }
+    const row = e.target.closest('.fv-row');
+    if (row && !e.target.closest('button')) {
+        const sub = row.parentElement.querySelector(':scope > ul');
+        const arrow = row.querySelector('.ri-arrow-right-s-line');
+        if (sub) {
+            sub.classList.toggle('hidden');
+            if (arrow) {
+                arrow.style.transform = sub.classList.contains('hidden') ? '' : 'rotate(90deg)';
+            }
+        }
+    }
+});
+
+async function toggleFolderVisibility(eyeBtn) {
+    const row = eyeBtn.closest('.fv-row');
+    const path = row.dataset.path.replace(/\//g, '\\');
+    const isHidden = eyeBtn.querySelector('i').classList.contains('ri-eye-line') ? false : true;
+    const newHidden = !isHidden;
+
+    try {
+        const sourceId = parseInt(row.dataset.sourceId);
+        const paths = _fvData.paths[sourceId] || {};
+        const resp = await fetch(`/admin/api/folders/${sourceId}/visibility`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({folder_path: path, is_hidden: newHidden})
+        });
+        if (!resp.ok) {
+            showToast('Failed to update', 'error');
+            return;
+        }
+        showToast(newHidden ? 'Folder hidden' : 'Folder visible');
+
+        // Broadcast to other tabs (main gallery) that visibility changed
+        try {
+            const bc = new BroadcastChannel('gallery-admin');
+            bc.postMessage({type: 'folder-visibility-changed', timestamp: Date.now()});
+            bc.close();
+        } catch(e) { /* BroadcastChannel not supported */ }
+
+        // Update in-place — no re-render
+        updateRowVisibility(row, newHidden);
+        // Also update children rows
+        row.parentElement.querySelectorAll('.fv-row').forEach(childRow => {
+            updateRowVisibility(childRow, newHidden);
+        });
+        // Update stored data
+        if (paths[path]) {
+            paths[path].is_hidden = newHidden;
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function updateRowVisibility(row, hidden) {
+    const eyeIcon = row.querySelector('.fv-eye-btn i');
+    const folderIcon = row.querySelector('.fv-folder-icon');
+    const nameSpan = row.querySelector('.fv-name');
+    if (eyeIcon) {
+        eyeIcon.className = hidden ? 'ri-eye-off-line text-slate-300 text-sm' : 'ri-eye-line text-blue-500 text-sm';
+        row.querySelector('.fv-eye-btn').title = hidden ? 'Show' : 'Hide';
+    }
+    if (folderIcon) {
+        folderIcon.className = hidden ? 'ri-folder-3-line text-slate-300 fv-folder-icon text-sm' : 'ri-folder-3-line text-amber-500 fv-folder-icon text-sm';
+    }
+    if (nameSpan) {
+        nameSpan.className = hidden ? 'flex-1 text-slate-400 fv-name' : 'flex-1 text-slate-700 fv-name';
+    }
+}
+
+
+
+// ================================
+// TAB 3: Scheduler
+// ================================
+let schedulesData = [];
+
+async function loadSchedules() {
+    const tbody = document.getElementById('schedules-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400"><i class="ri-loader-4-line animate-spin"></i> ' + i18n.get('loading.schedules') + '</td></tr>';
+
+    try {
+        // Fetch all data in parallel
+        const [sources, schedules] = await Promise.all([
+            fetch('/admin/api/sources').then(r => r.json()),
+            fetch('/admin/api/schedules').then(r => r.json()),
+        ]);
+        schedulesData = schedules;
+
+        // Scheduler toggle state
+        const toggle = document.getElementById('scheduler-toggle');
+        try {
+            const resp = await fetch('/admin/api/scheduler/status');
+            const data = await resp.json();
+            toggle.checked = data.enabled;
+        } catch(e) {}
+
+        if (!sources.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">' + i18n.get('empty.schedules') + '</td></tr>';
+            return;
+        }
+
+        // Build lookup: source_id → schedule
+        const schedBySourceId = {};
+        schedules.forEach(s => { schedBySourceId[s.media_source_id] = s; });
+
+        // Show ALL sources — each with its schedule controls or an "add" row
+        tbody.innerHTML = sources.map(s => {
+            const sched = schedBySourceId[s.id];
+            if (sched) {
+                // Existing schedule — show edit/delete controls
+                const lastRun = sched.last_run_at ? sched.last_run_at.replace('T', ' ') : '-';
+                const nextRun = sched.next_run_at ? sched.next_run_at.replace('T', ' ') : '-';
+                return `<tr class="hover:bg-slate-50/50">
+                    <td class="px-4 py-3 font-medium text-slate-700">${esc(s.name)}</td>
+                    <td class="px-4 py-3">
+                        <input type="number" id="sched-interval-${sched.id}" value="${sched.interval_minutes}" min="1" class="w-24 px-2 py-1 border border-slate-200 rounded text-sm">
+                    </td>
+                    <td class="px-4 py-3">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="hidden sched-toggle" id="sched-active-${sched.id}" ${sched.is_active ? 'checked' : ''}>
+                            <span class="toggle-slider w-10 h-5 rounded-full relative transition-colors duration-200">
+                                <span class="toggle-knob absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></span>
+                            </span>
+                        </label>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-slate-400">${lastRun}</td>
+                    <td class="px-4 py-3 text-xs text-slate-400">${nextRun}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex gap-1">
+                            <button onclick="saveSched(${sched.id})" class="sched-save-btn p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors" title="Save"><i class="ri-save-line text-sm"></i></button>
+                            <button onclick="deleteSched(${sched.id})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors" title="Delete"><i class="ri-delete-bin-line text-sm"></i></button>
+                        </div>
+                    </td>
+                </tr>`;
+            } else {
+                // No schedule yet — show add row
+                return `<tr>
+                    <td class="px-4 py-3 font-medium text-slate-700">${esc(s.name)}</td>
+                    <td class="px-4 py-3">
+                        <input type="number" id="sched-interval-${s.id}" value="1440" min="1" class="w-24 px-2 py-1 border border-slate-200 rounded text-sm">
+                    </td>
+                    <td class="px-4 py-3">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="hidden sched-toggle" id="sched-active-${s.id}" checked>
+                            <span class="toggle-slider w-10 h-5 rounded-full relative transition-colors duration-200">
+                                <span class="toggle-knob absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></span>
+                            </span>
+                        </label>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-slate-400">-</td>
+                    <td class="px-4 py-3 text-xs text-slate-400">-</td>
+                    <td class="px-4 py-3">
+                        <button onclick="addSchedule(${s.id})" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors" title="Add"><i class="ri-add-line text-sm"></i></button>
+                    </td>
+                </tr>`;
+            }
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ${esc(e.message)}</td></tr>`;
+    }
+}
+
+async function addSchedule(sourceId) {
+    const interval = document.getElementById(`sched-interval-${sourceId}`).value;
+    const active = document.getElementById(`sched-active-${sourceId}`).checked ? 1 : 0;
+    try {
+        const resp = await fetch('/admin/api/schedules', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({source_id: sourceId, interval_minutes: parseInt(interval), is_active: active})
+        });
+        if (!resp.ok) { showToast('Failed to create schedule', 'error'); return; }
+        showToast('Schedule created');
+        loadSchedules();
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function saveSched(id) {
+    const interval = document.getElementById(`sched-interval-${id}`).value;
+    const active = document.getElementById(`sched-active-${id}`).checked ? 1 : 0;
+    try {
+        const resp = await fetch(`/admin/api/schedules/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({interval_minutes: parseInt(interval), is_active: active})
+        });
+        if (!resp.ok) { showToast('Failed to update schedule', 'error'); return; }
+        const btn = document.querySelector(`button[onclick*="saveSched(${id})"]`);
+        if (btn) {
+            const icon = btn.querySelector('i');
+            icon.className = 'ri-check-line text-sm text-green-500';
+            btn.classList.add('pointer-events-none', 'opacity-60');
+            setTimeout(() => {
+                icon.className = 'ri-save-line text-sm';
+                btn.classList.remove('pointer-events-none', 'opacity-60');
+            }, 1200);
+        }
+        showToast('Schedule updated');
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+let _confirmCallback = null;
+
+function showConfirmModal(title, desc, callback) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-desc').textContent = desc;
+    _confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirmModal() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    _confirmCallback = null;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('confirm-btn').addEventListener('click', () => {
+        if (_confirmCallback) _confirmCallback();
+        closeConfirmModal();
+    });
+});
+
+async function deleteSched(id) {
+    showConfirmModal('Delete this schedule?', 'This action cannot be undone.', async () => {
+        try {
+            await fetch(`/admin/api/schedules/${id}`, { method: 'DELETE' });
+            showToast('Schedule deleted');
+            loadSchedules();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    });
+}
+
+async function toggleScheduler() {
+    const enabled = document.getElementById('scheduler-toggle').checked;
+    try {
+        const resp = await fetch('/admin/api/scheduler/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({enabled})
+        });
+        const data = await resp.json();
+        showToast(data.enabled ? 'Scheduler enabled' : 'Scheduler disabled');
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ================================
+// Utility
+// ================================
+function esc(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+// ================================
+// Init
+// ================================
+i18n.init();
+themeManager.init();
+updateLangIndicator(i18n.getLang());
+loadSources();
+</script>
+</body>
+</html>
