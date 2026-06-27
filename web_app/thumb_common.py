@@ -60,14 +60,15 @@ def find_thumb_file(photo_id, thumb_dir):
 
 
 def try_generate(file_path, thumb_path):
-    """Attempt thumbnail generation with PIL + HEIC/RAW fallback. Returns bool."""
+    """Attempt thumbnail generation with PIL + HEIC/RAW fallback. Returns (orig_w, orig_h) or None."""
     try:
         with Image.open(file_path) as img:
+            orig_w, orig_h = img.size
             if img.mode in ('RGBA', 'P'):
                 img = img.convert('RGB')
             img.thumbnail(THUMB_SIZE, Image.LANCZOS)
             img.save(thumb_path, 'JPEG', quality=75)
-        return True
+        return orig_w, orig_h
     except Exception:
         pass
 
@@ -76,11 +77,12 @@ def try_generate(file_path, thumb_path):
         import pillow_heif
         pillow_heif.register_heif_opener()
         with Image.open(file_path) as img:
+            orig_w, orig_h = img.size
             if img.mode in ('RGBA', 'P'):
                 img = img.convert('RGB')
             img.thumbnail(THUMB_SIZE, Image.LANCZOS)
             img.save(thumb_path, 'JPEG', quality=75)
-        return True
+        return orig_w, orig_h
     except Exception:
         pass
 
@@ -90,13 +92,14 @@ def try_generate(file_path, thumb_path):
         with rawpy.imread(file_path) as raw:
             rgb = raw.postprocess(use_camera_wb=True, half_size=True)
         img = Image.fromarray(rgb)
+        orig_w, orig_h = img.size
         img.thumbnail(THUMB_SIZE, Image.LANCZOS)
         img.save(thumb_path, 'JPEG', quality=75)
-        return True
+        return orig_w, orig_h
     except Exception:
         pass
 
-    return False
+    return None
 
 
 def remove_stale_thumb(photo_id, thumb_dir):

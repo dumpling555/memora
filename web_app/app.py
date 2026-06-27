@@ -23,17 +23,22 @@ THUMB_DIR = os.path.join(_BASE, 'cache', 'thumbnails')
 THUMB_MAP = {}  # {photo_id_str: file_path}
 
 # Load or generate secret key for session signing
-conn = sqlite3.connect(DATABASE)
-c = conn.cursor()
-c.execute("SELECT value FROM admin_settings WHERE key='secret_key'")
-row = c.fetchone()
-if row:
-    app.secret_key = row[0]
-else:
+try:
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT value FROM admin_settings WHERE key='secret_key'")
+    row = c.fetchone()
+    if row:
+        app.secret_key = row[0]
+    else:
+        app.secret_key = os.urandom(24).hex()
+        c.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES (?, ?)", ('secret_key', app.secret_key))
+        conn.commit()
+    conn.close()
+except sqlite3.OperationalError:
+    # Table doesn't exist yet on first startup; it will be created by _init_admin_db later
     app.secret_key = os.urandom(24).hex()
-    c.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES (?, ?)", ('secret_key', app.secret_key))
-    conn.commit()
-conn.close()
+
 
 # =============================================================================
 # Admin tables init + scheduler registration
@@ -88,18 +93,25 @@ def _init_admin_db():
             key   TEXT PRIMARY KEY,
             value TEXT
         );
-        CREATE TABLE IF NOT EXISTS thumb_progress (
+        CREATE TABLE IF NOT EXISTS image_analysis (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            media_source_id INTEGER NOT NULL REFERENCES media_sources(id),
-            total           INTEGER DEFAULT 0,
-            completed       INTEGER DEFAULT 0,
-            errors          INTEGER DEFAULT 0,
-            status          TEXT DEFAULT 'idle',
-            started_at      TEXT,
-            finished_at     TEXT,
-            error_message   TEXT,
-            created_at      TEXT DEFAULT (datetime('now'))
+            file_name       TEXT,
+            file_path       TEXT UNIQUE NOT NULL,
+            file_size       INTEGER,
+            width           INTEGER,
+            height          INTEGER,
+            format          TEXT,
+            overview        TEXT,
+            extracted_text  TEXT,
+            other_info      TEXT,
+            tags            TEXT,
+            raw_result      TEXT,
+            analyzed_at     TEXT,
+            created_at      TEXT DEFAULT (datetime('now')),
+            has_thumbnail   INTEGER DEFAULT 0
         );
+        CREATE INDEX IF NOT EXISTS idx_image_analysis_file_path ON image_analysis(file_path);
+        CREATE INDEX IF NOT EXISTS idx_image_analysis_analyzed_at ON image_analysis(analyzed_at);
     """)
 
     # Seed admin settings - scheduler enabled by default for auto quick-scan
@@ -122,6 +134,12 @@ def _init_admin_db():
     except sqlite3.OperationalError:
         pass  # column already exists
 
+    # --- Migrate: add has_thumbnail column if older schema misses it ---
+    try:
+        c.execute("ALTER TABLE image_analysis ADD COLUMN has_thumbnail INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     conn.close()
 
 
@@ -133,7 +151,6 @@ def _init_scheduler(app_instance):
     try:
         conn = sqlite3.connect(DATABASE)
         conn.execute("UPDATE scan_log SET status='cancelled', finished_at=datetime('now'), error_message='Process restarted' WHERE status='running'")
-        conn.execute("UPDATE thumb_progress SET status='cancelled', finished_at=datetime('now'), error_message='Process restarted' WHERE status='running'")
         conn.commit()
         conn.close()
     except Exception:
@@ -148,7 +165,7 @@ def _init_scheduler(app_instance):
     from thumb_daemon import ThumbnailDaemon
     from analysis_daemon import AnalysisDaemon
     scheduler = ScanScheduler(check_interval=60)
-    qs = QuickScanner(check_interval=60)
+    qs = QuickScanner(check_interval=1800)  # Check every 30 minutes to allow NAS disks to sleep
     thumb_d = ThumbnailDaemon()
     thumb_d.start()
     app_instance.config['THUMB_DAEMON'] = thumb_d
@@ -653,8 +670,19 @@ def serve_thumbnail(photo_id):
             return resp
         try:
             os.makedirs(THUMB_DIR, exist_ok=True)
-            if try_generate(file_path, thumb_path):
+            res = try_generate(file_path, thumb_path)
+            if res:
                 THUMB_MAP[str(photo_id)] = thumb_path
+                w, h = res
+                try:
+                    conn2 = sqlite3.connect(DATABASE)
+                    conn2.execute(
+                        "UPDATE image_analysis SET width=?, height=?, has_thumbnail=1 WHERE id=?",
+                        (w, h, photo_id))
+                    conn2.commit()
+                    conn2.close()
+                except Exception:
+                    pass
                 resp = send_file(thumb_path, last_modified=os.path.getmtime(thumb_path))
                 resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
                 return resp

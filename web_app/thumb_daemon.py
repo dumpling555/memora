@@ -81,34 +81,20 @@ class ThumbnailDaemon:
         if not os.path.isdir(root_path):
             return
 
-        existing = existing_thumb_map(THUMB_DIR)
-
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         prefix_len = len(root_path)
+
+        # Only select records that actually need attention: missing thumbnail OR missing dimensions
         cursor.execute("""
-            SELECT id, file_path FROM image_analysis
-            WHERE SUBSTR(file_path, 1, ?) = ?
+            SELECT id, file_path, width, height FROM image_analysis
+            WHERE SUBSTR(file_path, 1, ?) = ? AND (has_thumbnail = 0 OR width IS NULL OR height IS NULL)
             ORDER BY id
         """, (prefix_len, root_path))
         records = cursor.fetchall()
         conn.close()
-        if not records:
-            return
 
-        # Count already-completed
-        already = 0
-        for photo_id, file_path in records:
-            expected = thumb_filename(photo_id, file_path)
-            found = existing.get(photo_id)
-            if found == expected:
-                already += 1
-            elif found is not None and found != expected:
-                try:
-                    os.remove(os.path.join(THUMB_DIR, found))
-                except Exception:
-                    pass
-        if already == len(records):
+        if not records:
             return
 
         if source_id not in self._retries:
@@ -117,70 +103,104 @@ class ThumbnailDaemon:
             self._abandoned[source_id] = set()
 
         jobs = []
-        for photo_id, file_path in records:
-            expected = thumb_filename(photo_id, file_path)
-            if existing.get(photo_id) == expected:
-                continue
-            if photo_id in self._abandoned[source_id]:
-                continue
-            jobs.append((photo_id, file_path, os.path.join(THUMB_DIR, thumb_filename(photo_id, file_path))))
+        completed_records = []    # [(photo_id, w, h)]
+        missing_dimensions = []   # [(photo_id, file_path)]
 
-        if not jobs:
-            return
+        for photo_id, file_path, w, h in records:
+            expected = thumb_filename(photo_id, file_path)
+            thumb_path = os.path.join(THUMB_DIR, expected)
+
+            if os.path.exists(thumb_path):
+                # Thumbnail already exists on disk
+                if not w or not h:
+                    missing_dimensions.append((photo_id, file_path))
+                else:
+                    # Dimensions exist but has_thumbnail was 0; queue for DB sync
+                    completed_records.append((photo_id, w, h))
+            else:
+                # Thumbnail does not exist on disk
+                if photo_id in self._abandoned[source_id]:
+                    continue
+                jobs.append((photo_id, file_path, thumb_path))
 
         newly_completed = 0
         newly_errors = 0
-        completed_ids = []
 
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-            fut_map = {pool.submit(try_generate, fp, tp): (pid, fp)
-                       for pid, fp, tp in jobs if self._running}
-            for fut in as_completed(fut_map):
-                if not self._running:
-                    return
-                photo_id, file_path = fut_map[fut]
-                try:
-                    success = fut.result()
-                except Exception:
-                    success = False
+        if jobs:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                fut_map = {pool.submit(try_generate, fp, tp): (pid, fp)
+                           for pid, fp, tp in jobs if self._running}
+                for fut in as_completed(fut_map):
+                    if not self._running:
+                        return
+                    photo_id, file_path = fut_map[fut]
+                    try:
+                        res = fut.result()
+                    except Exception:
+                        res = None
 
-                if success:
-                    newly_completed += 1
-                    completed_ids.append(photo_id)
-                    existing[photo_id] = thumb_filename(photo_id, file_path)
-                    self._retries[source_id].pop(photo_id, None)
-                    self._abandoned[source_id].discard(photo_id)
-                else:
-                    count = self._retries[source_id].get(photo_id, 0) + 1
-                    self._retries[source_id][photo_id] = count
-                    newly_errors += 1
-                    if count >= self.max_retries:
-                        self._abandoned[source_id].add(photo_id)
-                        print(f'[thumb_daemon] abandoned id={photo_id} after {count} failures')
+                    if res:
+                        newly_completed += 1
+                        w, h = res
+                        completed_records.append((photo_id, w, h))
+                        self._retries[source_id].pop(photo_id, None)
+                        self._abandoned[source_id].discard(photo_id)
+                    else:
+                        count = self._retries[source_id].get(photo_id, 0) + 1
+                        self._retries[source_id][photo_id] = count
+                        newly_errors += 1
+                        if count >= self.max_retries:
+                            self._abandoned[source_id].add(photo_id)
+                            print(f'[thumb_daemon] abandoned id={photo_id} after {count} failures')
+                            try:
+                                conn2 = sqlite3.connect(DATABASE)
+                                conn2.execute("UPDATE image_analysis SET has_thumbnail = -1 WHERE id = ?", (photo_id,))
+                                conn2.commit()
+                                conn2.close()
+                            except Exception:
+                                pass
 
-        # Backfill dimensions
-        if completed_ids:
+        # Sync completed thumbnails to database
+        if completed_records:
             try:
                 conn = sqlite3.connect(DATABASE)
-                for pid in completed_ids:
-                    tf = find_thumb_file(pid, THUMB_DIR)
-                    if tf:
-                        try:
-                            with Image.open(tf) as img:
-                                w, h = img.size
-                                conn.execute(
-                                    "UPDATE image_analysis SET width=?, height=? WHERE id=?",
-                                    (w, h, pid))
-                        except Exception:
-                            pass
+                for pid, w, h in completed_records:
+                    conn.execute(
+                        "UPDATE image_analysis SET width=?, height=?, has_thumbnail=1 WHERE id=?",
+                        (w, h, pid))
                 conn.commit()
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[thumb_daemon] error updating dimensions/has_thumbnail for completed thumbs: {e}")
+
+        # Sync missing dimensions of existing thumbnails
+        if missing_dimensions and self._running:
+            print(f'[thumb_daemon] backfilling dimensions for {len(missing_dimensions)} existing thumbnails...')
+            try:
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                    def _get_size(pid, fp):
+                        try:
+                            with Image.open(fp) as img:
+                                return pid, img.size[0], img.size[1]
+                        except Exception:
+                            return pid, None, None
+
+                    fut_dims = [pool.submit(_get_size, pid, fp) for pid, fp in missing_dimensions if self._running]
+                    conn = sqlite3.connect(DATABASE)
+                    for fut in as_completed(fut_dims):
+                        if not self._running:
+                            break
+                        pid, w, h = fut.result()
+                        if w and h:
+                            conn.execute(
+                                "UPDATE image_analysis SET width=?, height=?, has_thumbnail=1 WHERE id=?",
+                                (w, h, pid))
+                    conn.commit()
+                    conn.close()
+            except Exception as e:
+                print(f"[thumb_daemon] error backfilling dimensions: {e}")
 
         if newly_completed or newly_errors:
-            pct = 100 * (already + newly_completed) / len(records) if records else 0
             print(f'[thumb_daemon] source_id={source_id}: '
-                  f'{pct:.0f}% ({already+newly_completed}/{len(records)}) '
                   f'+{newly_completed} thumbs, {newly_errors} fail, '
                   f'{len(self._abandoned[source_id])} abandoned total')

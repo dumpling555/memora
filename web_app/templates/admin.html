@@ -205,6 +205,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
                 </span>
             </label>
         </div>
+        <div class="text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-lg border border-slate-100 leading-relaxed" data-i18n="scheduler.description">
+            自动同步计划用于让系统在后台定期自动扫描您的照片文件夹。扫描时系统会查找新照片、同步删除状态并补全原图宽高尺寸。推荐设置为 1440 分钟（24小时）以允许 NAS 硬盘正常休眠。
+        </div>
         <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -405,7 +408,8 @@ async function loadSources() {
                 <td class="px-4 py-3"><span class="connectivity-${s.id} text-xs text-slate-400"><i class="ri-loader-4-line animate-spin"></i> Checking...</span></td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-1.5">
-                        <button onclick="triggerScan(${s.id})" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Quick scan"><i class="ri-play-circle-line"></i></button>
+                        <button onclick="triggerScan(${s.id}, 'incremental')" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Quick scan"><i class="ri-play-circle-line"></i></button>
+                        <button onclick="triggerScan(${s.id}, 'full')" class="p-1.5 text-slate-400 hover:text-green-600 rounded hover:bg-green-50" title="Full scan"><i class="ri-refresh-line"></i></button>
                         <button onclick="editSource(${s.id})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded hover:bg-amber-50" title="Edit"><i class="ri-pencil-line"></i></button>
                         <button onclick="deleteSource(${s.id})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line"></i></button>
                     </div>
@@ -537,7 +541,7 @@ async function checkConnectivity(id) {
     }
 }
 
-async function triggerScan(id) {
+async function triggerScan(id, mode = 'incremental') {
     const s = sourcesData.find(x => x.id === id);
     if (!s) return;
 
@@ -555,13 +559,17 @@ async function triggerScan(id) {
     }
 
     try {
-        const resp = await fetch(`/admin/api/scan/${id}?mode=incremental`, { method: 'POST' });
+        const resp = await fetch(`/admin/api/scan/${id}?mode=${mode}`, { method: 'POST' });
         const data = await resp.json();
         if (resp.status === 409) {
             showToast('Scan already in progress', 'info');
             return;
         }
-        showToast(`Quick scan started for "${s.name}"`, 'success');
+        if (mode === 'full') {
+            showToast(`Full scan started for "${s.name}"`, 'success');
+        } else {
+            showToast(`Quick scan started for "${s.name}"`, 'success');
+        }
     } catch (e) {
         showToast('Failed to start scan: ' + e.message, 'error');
     }

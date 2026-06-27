@@ -4,3 +4,4 @@ pillow-heif
 rawpy
 requests
 werkzeug
+tqdm

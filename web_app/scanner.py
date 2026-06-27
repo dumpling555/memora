@@ -10,8 +10,12 @@ Uses ThreadPoolExecutor for parallel file stat() over SMB.
 import os
 import time
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
+
+_scanner_lock = threading.Lock()
+_active_scan_sources = set()
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(_BASE, '..', 'res.sqlite')
@@ -71,6 +75,18 @@ def _walk_parallel(root, max_workers=8):
 
 def run_scan(source_id, log_id, mode='incremental', abort_event=None):
     """Scan a media source and update image_analysis."""
+    with _scanner_lock:
+        if source_id in _active_scan_sources:
+            print(f"[scanner] Scan already running for source {source_id}, skipping duplicate request")
+            try:
+                conn = get_db()
+                _finish_scan(conn, log_id, 'cancelled', error_message='Another scan already running for this source')
+                conn.close()
+            except Exception:
+                pass
+            return
+        _active_scan_sources.add(source_id)
+
     conn = get_db()
     cursor = conn.cursor()
     start_time = time.time()
@@ -91,7 +107,7 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
         # 2. Load existing DB records into memory
         if mode == 'incremental':
             cursor.execute('SELECT file_path FROM image_analysis WHERE file_path LIKE ?', (root + '%',))
-            existing_paths = set(row['file_path'] for row in cursor.fetchall())
+            existing_paths = set(os.path.normpath(row['file_path']) for row in cursor.fetchall())
             existing_by_path = None
         else:
             cursor.execute('SELECT id, file_path, file_size, created_at FROM image_analysis')
@@ -179,6 +195,15 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
                     if deleted % BATCH_COMMIT == 0:
                         conn.commit()
                         _update_scan_progress(conn, log_id, total, new, updated, skipped, deleted, errors)
+        elif mode == 'incremental':
+            deleted_paths = existing_paths - seen_paths
+            if deleted_paths:
+                for path in deleted_paths:
+                    cursor.execute("DELETE FROM image_analysis WHERE file_path = ?", (path,))
+                    deleted += 1
+                    if deleted % BATCH_COMMIT == 0:
+                        conn.commit()
+                        _update_scan_progress(conn, log_id, total, new, updated, skipped, deleted, errors)
 
         conn.commit()
         elapsed = time.time() - start_time
@@ -194,6 +219,8 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
         except Exception:
             pass
     finally:
+        with _scanner_lock:
+            _active_scan_sources.discard(source_id)
         conn.close()
 
 

@@ -73,6 +73,14 @@ def create_source():
         cursor.execute('SELECT * FROM media_sources WHERE id = ?', (new_id,))
         row = cursor.fetchone()
         conn.close()
+
+        # Trigger an initial quick scan immediately in the background
+        if is_active:
+            try:
+                _start_scan(new_id, 'incremental')
+            except Exception as e:
+                print(f'[admin] failed to start initial scan for source {new_id}: {e}')
+
         return jsonify(dict(row)), 201
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Root path already exists'}), 409
@@ -343,29 +351,10 @@ _scan_abort = {}    # {log_id: threading.Event()}
 _scan_lock = threading.Lock()
 
 
-@admin_bp.route('/api/scan/<int:source_id>', methods=['POST'])
-def trigger_scan(source_id):
+def _start_scan(source_id, mode='incremental'):
+    """Helper to programmatically start a scan thread for a source."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM media_sources WHERE id = ?', (source_id,))
-    source = cursor.fetchone()
-    if not source:
-        conn.close()
-        abort(404)
-
-    # Determine scan mode from query param: ?mode=full for deep scan
-    mode = request.args.get('mode', 'incremental')
-    if mode not in ('incremental', 'full'):
-        mode = 'incremental'
-
-    # Prevent duplicate scans for same source
-    with _scan_lock:
-        if source_id in _active_scans:
-            conn.close()
-            return jsonify({
-                'error': 'Scan already running for this source',
-                'scan_log_id': _active_scans[source_id]
-            }), 409
 
     # Create scan_log entry
     now = time.strftime('%Y-%m-%d %H:%M:%S')
@@ -408,7 +397,34 @@ def trigger_scan(source_id):
     thread = threading.Thread(target=_scan_wrapper, args=(source_id, log_id, event, mode),
                               daemon=True, name=f'scan-{source_id}')
     thread.start()
+    return log_id
 
+
+@admin_bp.route('/api/scan/<int:source_id>', methods=['POST'])
+def trigger_scan(source_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM media_sources WHERE id = ?', (source_id,))
+    source = cursor.fetchone()
+    if not source:
+        conn.close()
+        abort(404)
+    conn.close()
+
+    # Determine scan mode from query param: ?mode=full for deep scan
+    mode = request.args.get('mode', 'incremental')
+    if mode not in ('incremental', 'full'):
+        mode = 'incremental'
+
+    # Prevent duplicate scans for same source
+    with _scan_lock:
+        if source_id in _active_scans:
+            return jsonify({
+                'error': 'Scan already running for this source',
+                'scan_log_id': _active_scans[source_id]
+            }), 409
+
+    log_id = _start_scan(source_id, mode)
     return jsonify({'scan_log_id': log_id, 'status': 'running', 'mode': mode}), 202
 
 
