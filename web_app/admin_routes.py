@@ -21,8 +21,66 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
+def is_safe_media_path(path):
+    """
+    Validate if a path is safe to be registered as a media source.
+    Rejects drive roots like C:\\, critical system paths, and temp/cache folders.
+    """
+    if not path:
+        return False
+    try:
+        # Normalize path
+        normalized = os.path.abspath(os.path.normpath(path))
+    except Exception:
+        return False
 
+    # Standardize separator and case for comparison
+    normalized_clean = normalized.replace('\\', '/').rstrip('/').lower()
+    
+    # Block root directories
+    # Windows: C:/, C: etc. Linux: / (empty string after strip)
+    if normalized_clean in ('', 'c:'):
+        return False
 
+    # System directories to block (exact match and children)
+    blocked_prefixes = [
+        "c:/windows",
+        "c:/program files",
+        "c:/program files (x86)",
+        "c:/programdata",
+        "c:/users",
+        "/boot",
+        "/dev",
+        "/etc",
+        "/lib",
+        "/lib64",
+        "/proc",
+        "/sys",
+        "/usr",
+        "/var",
+        "/bin",
+        "/sbin",
+        "/root"
+    ]
+
+    for prefix in blocked_prefixes:
+        # Exact match of blocked prefix
+        if normalized_clean == prefix:
+            return False
+        # Child of blocked prefix
+        if normalized_clean.startswith(prefix + "/"):
+            # Exception: allow subfolders of C:/Users, but block AppData/Temp/Recycle Bin
+            if prefix == "c:/users":
+                if any(x in normalized_clean for x in ("/appdata", "/temp", "/$recycle.bin", "/system_volume_information", "/system volume information")):
+                    return False
+            else:
+                return False
+
+    # Global block for recycle bins and system volume information
+    if any(x in normalized_clean for x in ("$recycle.bin", "system volume information", "system_volume_information")):
+        return False
+
+    return True
 
 
 # =============================================================================
@@ -60,6 +118,9 @@ def create_source():
     if not root_path:
         return jsonify({'error': 'Root path is required'}), 400
 
+    if not is_safe_media_path(root_path):
+        return jsonify({'error': 'Unsafe path. System roots (like C:\\) and operating system folders are blocked.'}), 400
+
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -89,6 +150,13 @@ def create_source():
 @admin_bp.route('/api/sources/<int:source_id>', methods=['PUT'])
 def update_source(source_id):
     data = request.get_json(force=True)
+    if 'root_path' in data:
+        path_val = (data['root_path'] or '').strip()
+        if not path_val:
+            return jsonify({'error': 'Root path is required'}), 400
+        if not is_safe_media_path(path_val):
+            return jsonify({'error': 'Unsafe path. System roots (like C:\\) and operating system folders are blocked.'}), 400
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM media_sources WHERE id = ?', (source_id,))
@@ -100,8 +168,11 @@ def update_source(source_id):
     params = []
     for field in ('name', 'root_path', 'is_active'):
         if field in data:
+            val = data[field]
+            if field == 'root_path':
+                val = val.strip()
             updates.append(f'{field} = ?')
-            params.append(data[field])
+            params.append(val)
     if updates:
         updates.append("updated_at = datetime('now')")
         params.append(source_id)
@@ -185,6 +256,9 @@ def test_path_direct():
     root_path = request.args.get('path', '').strip()
     if not root_path:
         return jsonify({'ok': False, 'message': 'No path provided'}), 400
+
+    if not is_safe_media_path(root_path):
+        return jsonify({'ok': False, 'message': 'Unsafe path. System roots (like C:\\) and operating system folders are blocked.', 'stats': None}), 400
 
     if not os.path.exists(root_path):
         return jsonify({'ok': False, 'message': 'Path does not exist', 'stats': None})
