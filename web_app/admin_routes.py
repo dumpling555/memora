@@ -758,3 +758,48 @@ def toggle_scheduler():
 
     return jsonify({'ok': True, 'enabled': enabled})
 
+
+# =============================================================================
+# Local LLM settings
+# =============================================================================
+
+@admin_bp.route('/api/settings/llm', methods=['GET'])
+def get_llm_settings():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM admin_settings WHERE key IN ('llm_api_url', 'llm_model_name')")
+    settings = {'api_url': 'http://172.18.18.100:1234/v1', 'model_name': 'google/gemma-4-26b-a4b'}
+    for key, value in cursor.fetchall():
+        if key == 'llm_api_url':
+            settings['api_url'] = value
+        elif key == 'llm_model_name':
+            settings['model_name'] = value
+    conn.close()
+    return jsonify(settings)
+
+
+@admin_bp.route('/api/settings/llm', methods=['POST'])
+def save_llm_settings():
+    data = request.get_json()
+    api_url = (data.get('api_url') or '').strip()
+    model_name = (data.get('model_name') or '').strip()
+
+    if not api_url:
+        return jsonify({'error': 'API URL is required'}), 400
+    if not model_name:
+        return jsonify({'error': 'Model Name is required'}), 400
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO admin_settings (key, value) VALUES ('llm_api_url', ?)
+        ON CONFLICT(key) DO UPDATE SET value = ?
+    """, (api_url, api_url))
+    conn.execute("""
+        INSERT INTO admin_settings (key, value) VALUES ('llm_model_name', ?)
+        ON CONFLICT(key) DO UPDATE SET value = ?
+    """, (model_name, model_name))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+

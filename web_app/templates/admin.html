@@ -138,6 +138,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
         <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 flex items-center justify-center gap-1.5" data-tab="scheduler">
             <i class="ri-time-line"></i> <span data-i18n="tab.scheduler">Scheduler</span>
         </button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 flex items-center justify-center gap-1.5" data-tab="llm">
+            <i class="ri-brain-line"></i> <span data-i18n="tab.llm">Local LLM</span>
+        </button>
     </div>
 
     <!-- Toast container -->
@@ -225,6 +228,39 @@ button:active:not(:disabled) { transform: scale(0.97); }
                         <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400" data-i18n="loading.schedules">Loading...</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 4: Local LLM Settings -->
+    <!-- ============================================================ -->
+    <div id="tab-llm" class="tab-panel">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-slate-700">
+                <i class="ri-brain-line text-blue-500 mr-1"></i> <span data-i18n="llm.title">Local LLM Settings</span>
+            </h2>
+        </div>
+        <div class="text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-lg border border-slate-100 leading-relaxed" data-i18n="llm.description">
+            配置系统分析图像及生成标签所使用的本地大语言模型（如 LM Studio）。请确保本地模型服务已启动，且支持多模态（Vision）图像分析。
+        </div>
+        <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1" data-i18n="llm.api_url">API Base URL</label>
+                    <input id="llm-api-url" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="e.g. http://localhost:1234/v1">
+                    <p class="text-xs text-slate-400 mt-1" data-i18n="llm.api_url_hint">LM Studio or compatible local API base URL.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1" data-i18n="llm.model_name">Model Name</label>
+                    <input id="llm-model-name" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="e.g. google/gemma-4-26b-a4b">
+                    <p class="text-xs text-slate-400 mt-1" data-i18n="llm.model_name_hint">The identifier of the active loaded model.</p>
+                </div>
+            </div>
+            <div class="flex justify-end pt-2">
+                <button id="save-llm-btn" onclick="saveLlmSettings()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm">
+                    <i class="ri-save-line"></i> <span data-i18n="llm.save">Save Settings</span>
+                </button>
             </div>
         </div>
     </div>
@@ -375,6 +411,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         // Lazy load data for specific tabs
         if (btn.dataset.tab === 'folders') { loadFolderTree(); }
         if (btn.dataset.tab === 'scheduler') loadSchedules();
+        if (btn.dataset.tab === 'llm') loadLlmSettings();
     });
 });
 
@@ -945,6 +982,53 @@ async function toggleScheduler() {
         const data = await resp.json();
         showToast(data.enabled ? 'Scheduler enabled' : 'Scheduler disabled');
     } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ================================
+// Local LLM Settings
+// ================================
+async function loadLlmSettings() {
+    try {
+        const resp = await fetch('/admin/api/settings/llm');
+        if (!resp.ok) throw new Error('Failed to load LLM settings');
+        const data = await resp.json();
+        document.getElementById('llm-api-url').value = data.api_url || '';
+        document.getElementById('llm-model-name').value = data.model_name || '';
+    } catch (e) {
+        showToast(i18n.get('toast.llm_failed') + ': ' + e.message, 'error');
+    }
+}
+
+async function saveLlmSettings() {
+    const api_url = document.getElementById('llm-api-url').value.trim();
+    const model_name = document.getElementById('llm-model-name').value.trim();
+    if (!api_url || !model_name) {
+        showToast('API URL and Model Name are required', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('save-llm-btn');
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/admin/api/settings/llm', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': _csrfToken
+            },
+            body: JSON.stringify({ api_url, model_name })
+        });
+        if (resp.ok) {
+            showToast(i18n.get('toast.llm_saved'));
+        } else {
+            const err = await resp.json();
+            throw new Error(err.error || 'Server error');
+        }
+    } catch (e) {
+        showToast(i18n.get('toast.llm_failed') + ': ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
 }
 
 // ================================

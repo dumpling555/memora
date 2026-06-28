@@ -118,12 +118,33 @@ def prepare_image(image_path: str) -> tuple:
 def image_to_b64(image_data: bytes) -> str:
     return base64.b64encode(image_data).decode("utf-8")
 
+def get_llm_config():
+    """Load LLM settings from the database, falling back to hardcoded defaults."""
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'res.sqlite')
+    api_url = "http://172.18.18.100:1234/v1"
+    model_name = "google/gemma-4-26b-a4b"
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM admin_settings WHERE key IN ('llm_api_url', 'llm_model_name')")
+        for key, value in c.fetchall():
+            if key == 'llm_api_url' and value:
+                api_url = value.strip()
+            elif key == 'llm_model_name' and value:
+                model_name = value.strip()
+        conn.close()
+    except Exception as e:
+        print(f"[ai_helper] Error loading LLM config: {e}")
+    return api_url, model_name
+
 def analyze_image_with_lmstudio(image_b64: str, media_type: str, max_retries: int = 3) -> str:
     """Analyze image using LM Studio local endpoint."""
-    api_url = "http://172.18.18.100:1234/v1/chat/completions"
+    base_url, model_name = get_llm_config()
+    api_url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {"Content-Type": "application/json"}
     payload = {
-        "model": "google/gemma-4-26b-a4b",
+        "model": model_name,
         "max_tokens": 4096,
         "messages": [
             {
@@ -185,6 +206,8 @@ def analyze_image_with_lmstudio(image_b64: str, media_type: str, max_retries: in
 
 def call_tag_lm(overviews: list, max_retries: int = 3) -> str:
     """Call LM Studio to generate Chinese tags from overviews in batch."""
+    base_url, model_name = get_llm_config()
+    api_url = f"{base_url.rstrip('/')}/chat/completions"
     lines = []
     for rid, fname, overview in overviews:
         desc = (overview or "")[:200]
@@ -196,7 +219,7 @@ def call_tag_lm(overviews: list, max_retries: int = 3) -> str:
     )
 
     payload = {
-        "model": "google/gemma-4-26b-a4b",
+        "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 4096,
         "temperature": 0.1,
@@ -205,7 +228,7 @@ def call_tag_lm(overviews: list, max_retries: int = 3) -> str:
     for attempt in range(max_retries):
         try:
             resp = requests.post(
-                "http://172.18.18.100:1234/v1/chat/completions",
+                api_url,
                 json=payload,
                 timeout=180,
             )
