@@ -64,3 +64,6 @@ TASK_EXPERIENCE.md
 analysis_execution_log.md
 solution.md
 docx_content.txt
+
+# Large models / binaries
+text2vec-base-chinese/

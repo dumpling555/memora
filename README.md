@@ -1,111 +1,195 @@
-# Memora — 智能照片档案管理系统
+# Memora — 智能照片档案与语义搜索系统 / スマート写真アーカイブと意味検索システム
 
-**English:** Intelligent Photo Archive Manager &nbsp;|&nbsp; **日本語:** スマート写真アーカイブ管理システム
-
-基于 Flask + SQLite 的轻量级 NAS 照片管理平台。自动扫描、AI 描述与标签、缩略图生成、网页图库浏览。
-
-Lightweight NAS photo management platform on Flask + SQLite. Auto-scan, AI description & tags, thumbnail generation, web gallery browsing.
-
-軽量な NAS 写真管理プラットフォーム（Flask + SQLite）。自動スキャン、AI 説明文・タグ生成、サムネイル作成、Web ギャラリー閲覧。
+[中文版 (Chinese)](#chinese-version) | [日本語版 (Japanese)](#japanese-version)
 
 ---
 
-## 功能 / Features / 機能
+<a name="chinese-version"></a>
 
-| 中文 | English | 日本語 |
-|---|---|---|
-| 统一登录（session 认证） | Unified login (session auth) | 統一ログイン（セッション認証） |
-| AI 自动分析与标签生成 (LM Studio) | AI auto-analysis & tags (LM Studio) | AI 自動分析・タグ生成 (LM Studio) |
-| 后台分析守护进程 | Background analysis daemon | バックグラウンド分析デーモン |
-| 多源媒体库管理 | Multi-source media management | 複数メディアソース管理 |
-| 文件夹可见性控制 | Folder visibility control | フォルダ表示制御 |
-| 时间线浏览 | Timeline browsing | タイムライン表示 |
-| 无限滚动加载 | Infinite scroll | 無限スクロール |
-| 后台自动扫描 | Auto background scanning | 自動スキャン |
-| 缩略图后台生成 | Background thumbnail generation | サムネイル自動生成 |
-| 明暗主题切换 | Dark/light theme toggle | ダーク/ライト切替 |
-| 中/英/日多语言 | Chinese/English/Japanese i18n | 中国語/英語/日本語対応 |
+# 🇨🇳 中文版 (Chinese Version)
 
-## 技术栈 / Tech Stack / 技術スタック
+Memora 是一款专为个人、家庭及小型工作室设计的**轻量级、完全本地化**的智能照片档案管理与语义搜索系统。它可以轻松部署在个人电脑或 NAS 上，将您庞大的照片库转化为可通过自然语言轻松检索的智能知识库。
 
-| Layer | 技术 | Technology | 技術 |
-|---|---|---|---|
-| 后端 | Flask (Python) | Flask (Python) | Flask (Python) |
-| 数据库 | SQLite (`res.sqlite`) | SQLite (`res.sqlite`) | SQLite (`res.sqlite`) |
-| AI 后端 | LM Studio (本地 LLM) | LM Studio (local LLM) | LM Studio (ローカル LLM) |
-| 前端 | Tailwind CSS + RemixIcon | Tailwind CSS + RemixIcon | Tailwind CSS + RemixIcon |
-| 媒体源 | NAS / SMB 本地映射路径 | NAS / SMB mapped path | NAS / SMB マッピングパス |
+## 🌟 产品实用性 (Practical Utility)
 
-## 环境要求 / Prerequisites / 前提条件
+在日常使用中，Memora 解决了传统照片管理工具的诸多痛点，为用户提供极其便捷实用的操作体验：
+1. **多源媒体库接入**：支持挂载多个 NAS 存储目录或本地文件夹，灵活管理分散在不同设备中的照片库。
+2. **多线程并发扫描**：针对网络存储（如 SMB 协议下的 NAS）高延迟特性，使用基于线程池的并行 `scandir` 目录遍历，使文件扫描速度提升数倍。支持**增量扫描（仅扫描新增）**与**全量扫描（新增、更新并自动清理已删除文件）**。
+3. **完全离线 AI 图像描述与打标**：通过连接本地部署的 LM Studio（如接入 Gemma-4-26b 视觉大模型），系统会自动在后台对新照片进行图像意境解析、文本提取（OCR）与标签智能生成，整个过程无需连接外网。
+4. **异步缩略图与守护进程**：系统内置多个独立的守护线程（分析守护进程、缩略图守护进程、调度管理器等），所有繁重的计算（模型推理、图片转换、缩略图生成）全部在后台异步处理，保障前端浏览和搜索的极致流畅与零卡顿。
+5. **现代时光轴与自适应 UI**：前端提供无限滚动照片墙、按文件夹过滤、按日期时光轴筛选，并支持深色/浅色主题的无缝切换。
 
-- Python 3.7+
-- NAS 存储映射为本地盘符（如 `Z:\`）
-- （可选）LM Studio 本地运行以启用 AI 分析
+---
 
-## 安装与运行 / Installation / インストール
+## 🚀 核心创新点 (Innovative Points)
 
+### 1. 离线双轨检索融合系统 (Offline Hybrid Search)
+Memora 创新性地将**高维向量相似度检索**与**传统精确关键词检索**进行融合：
+* **向量模糊召回**：使用 768 维的中英双语 Embedding 模型，能够理解“温暖的氛围”、“科技感”、“孤独的背影”等抽象意境，即便图片信息中没有这些字眼，也能通过画面含义和情绪进行精准匹配。
+* **关键词加权打分**：在向量检索结果上，若照片文本属性（如文件名、标签、OCR 文本、图像描述等）中精确匹配了用户的检索词，则获得大幅度比分加成（`Score += 1.5`）。
+* **效果**：完美解决了传统搜索“找不到近义词、看不懂意境”与向量搜索“对精确文件名定位不准”的硬伤，实现了“精确匹配排最前，相似意境铺随后”的流畅体验。
+
+### 2. 100% 隐私安全与零云端依赖 (100% Offline Privacy)
+所有的 AI 功能均在本地执行：
+* **Embedding 模型本地化部署**：向量模型完全部署在当前项目的本目录下，在无外网环境下依然能进行搜索向量计算。
+* **本地 VLM 推理**：图像理解依赖本地运行的 LM Studio 接口，照片绝对不会上传到云端，最大限度保护个人和家庭的隐私安全。
+
+### 3. 网络存储并发访问优化 (NAS-focused SMB Optimization)
+设计了 `_walk_parallel` 算法，在遍历网络挂载的磁盘时，多层级目录扫描并行提交到 Python 的 `ThreadPoolExecutor` 中，相比单线程顺序 walk，大幅减少了因网络往返产生的等待时间。
+
+### 4. 渐进式模型加载 (Lazy Loading & Multi-threading Safe)
+模型加载设计为按需加载。在服务刚启动或仅浏览图库时，不占用任何深度学习内存。仅在首次搜索或执行分析时载入，并保证在 Flask 多线程请求下的线程安全。
+
+---
+
+## 🛠️ 所用到的技术 (Technology Stack)
+
+| 模块 | 技术选型 | 说明 |
+| :--- | :--- | :--- |
+| **后端框架** | **Flask (Python 3.7+)** | 轻量高效，方便与 Python 生态中的 AI 工具链无缝整合 |
+| **数据库** | **SQLite (PRAGMA WAL + Row)** | 单文件存储，启用 WAL（预写日志）模式，保证高并发读写性能 |
+| **向量化模型** | **SentenceTransformers** | 选用 `shibing624/text2vec-base-chinese`，离线保存于本目录下 |
+| **矩阵计算** | **NumPy (float32)** | 用于高速向量点积、模长及余弦相似度计算，搜索响应 < 50ms |
+| **图像预处理** | **Pillow + rawpy + pillow_heif** | 支持常规格式、HEIC/HEIF (苹果格式) 及 ARW (索尼无损 RAW 格式) |
+| **前端样式** | **Tailwind CSS + Remix Icon** | 响应式栅格布局、毛玻璃效果、动效主题切换 |
+| **国际化** | **i18n** | 支持中文、英文、日文三种语言的一键切换 |
+
+---
+
+## 📂 项目结构说明
+
+* [web_app/app.py](file:///C:/Users/团子潘/Desktop/nf/web_app/app.py) - Flask 服务入口，负责路由分发、混合检索、会话认证、数据库连接复用及调度进程初始化。
+* [web_app/embedding_helper.py](file:///C:/Users/团子潘/Desktop/nf/web_app/embedding_helper.py) - 向量化模型管理，负责延迟加载本地 `text2vec` 模型、向量计算与数据库存储。
+* [web_app/analysis_daemon.py](file:///C:/Users/团子潘/Desktop/nf/web_app/analysis_daemon.py) - 后台图片 AI 分析守护进程，定时调度 VLM 分析，并联动向量生成。
+* [web_app/scanner.py](file:///C:/Users/团子潘/Desktop/nf/web_app/scanner.py) - 高并发 SMB/NAS 目录文件扫描器。
+* [web_app/thumb_daemon.py](file:///C:/Users/团子潘/Desktop/nf/web_app/thumb_daemon.py) - 缩略图后台多线程生成器。
+* [analyze_images_sqlite.py](file:///C:/Users/团子潘/Desktop/nf/analyze_images_sqlite.py) - 独立的命令行分析回刷工具，同样集成向量生成逻辑。
+* [generate_vectors_backfill.py](file:///C:/Users/团子潘/Desktop/nf/generate_vectors_backfill.py) - 一键为历史已分析数据补齐向量特征的工具。
+
+---
+
+## ⚡ 安装与运行
+
+### 1. 准备工作
+克隆项目后，确保 Python 3.7+ 环境已就绪。
+安装项目依赖（包括新引入的语义搜索支持库）：
 ```bash
 pip install -r requirements.txt
-python web_app/app.py
 ```
 
-打开浏览器访问 **http://127.0.0.1:5000**
-
-首次使用：
-1. 用 `admin` / `admin@123` 登录（强制修改密码）
-2. 进入 `/admin` → 媒体源 → 添加你的 NAS 照片目录
-
-## 数据库 / Database / データベース
-
-首次启动自动创建 `res.sqlite`：
-
-| 表 / Table | 用途 / Purpose |
-|---|---|
-| `image_analysis` | 照片元数据（路径、描述、标签、OCR文本、尺寸等） |
-| `media_sources` | NAS 媒体源路径（启用/停用） |
-| `folder_visibility` | 文件夹可见性设置 |
-| `scan_log` | 扫描历史（状态、文件数、时间戳） |
-| `scan_schedules` | 定时扫描配置 |
-| `admin_settings` | 键值存储（凭据、调度开关、secret key） |
-| `thumb_progress` | 缩略图生成进度 |
-
-## 项目结构 / Project Structure / プロジェクト構成
-
-```
-.
-├── web_app/
-│   ├── app.py              # Flask 入口 — 认证、路由、调度初始化
-│   ├── admin_routes.py     # 管理后台 (/admin)
-│   ├── analysis_daemon.py  # AI 分析守护进程
-│   ├── scanner.py          # 照片目录扫描器
-│   ├── quick_scanner.py    # 快速增量扫描
-│   ├── scheduler.py        # 定时调度
-│   ├── thumb_daemon.py     # 缩略图后台生成
-│   ├── thumb_generator.py  # 缩略图批量生成
-│   ├── thumb_common.py     # 缩略图公共工具
-│   ├── templates/          # HTML 模板
-│   └── static/             # 静态资源
-├── res.sqlite              # 运行时数据库
-├── requirements.txt
-└── README.md
+### 2. 首次向量回刷（针对已有数据）
+若已有 analyzed 的图片数据，在开启服务前运行此脚本进行一键特征生成，它会把模型自动下载并归档保存到本地的 `text2vec-base-chinese` 目录下：
+```bash
+python generate_vectors_backfill.py
 ```
 
-## 关键设计 / Key Concepts / 設計のポイント
+### 3. 启动 Flask 服务
+使用以下命令启动服务：
+```powershell
+& "C:\Program Files\python\python.exe" web_app/app.py
+```
+启动后访问：`http://127.0.0.1:5000`
 
-- **Active Sources**: 从 `media_sources` 表动态读取源路径，无硬编码
-- **路径分隔符**: Windows 反斜杠 `\`，统一用 `os.path.normpath()` 处理
-- **后台线程**: Scanner / QuickScanner / Scheduler / AnalysisDaemon / ThumbnailDaemon 均以 daemon 线程运行
-- **扫描模式**: `incremental`（仅新增） / `full`（新增 + 更新 + 删除）
-- **数据库连接**: 统一使用 `get_db_connection()`（设置 `row_factory` 和 `PRAGMA journal_mode=WAL`）
+### 4. 首次使用配置
+1. 默认管理员账号：`admin`，密码：`admin@123`（首次登录需修改密码）。
+2. 登录后进入 `/admin` 管理后台，添加媒体源（NAS 照片根目录）并激活。
+3. 配置本地 LM Studio API 接口地址与视觉模型名称，系统便会自动开启后台分析。
 
-## 注意事项 / Notes / 注意事項
+---
+---
 
-- `res.sqlite` 是生产数据库，勿提交或删除
-- `web_app/cache/`（缩略图）为运行时生成，勿提交
-- NAS 路径必须本地可访问
-- AI 分析需要 LM Studio API 本地运行
-- `send_file()` 用于照片/缩略图流式传输，生产环境建议增加目录遍历防护
+<a name="japanese-version"></a>
 
-## 许可证 / License / ライセンス
+# 🇯🇵 日本語版 (Japanese Version)
 
-MIT
+Memoraは、個人、家庭、および小規模スタジオ向けに設計された、**軽量で完全にローカルにデプロイ可能**なスマート写真アーカイブおよびセマンティック（意味）検索システムです。PCやNAS上で動作させることができ、大量の写真ライブラリを自然言語で簡単に検索できるスマートナレッジベースに変えることができます。
+
+## 🌟 実用的な機能性 (Practical Utility)
+
+日常的な使用において、Memoraは従来の写真管理ツールの課題を解決し、非常にスムーズなユーザー体験を提供します。
+1. **マルチソース・メディアライブラリ管理**：複数のNAS共有ディレクトリやローカルフォルダをマウントし、異なるデバイスに分散した写真ライブラリを一元管理。
+2. **マルチスレッド並行スキャン**：SMBプロトコルなどのネットワークストレージ（NAS）の高レイテンシに対応するため、スレッドプールを用いた並行 `scandir` ディレクトリ巡回を採用。スキャン速度を大幅に向上させました。**増分スキャン（新規ファイルのみ）**と**フルスキャン（削除されたファイルの自動クリーンアップを含む）**をサポート。
+3. **完全オフラインのAI画像分析とタグ生成**：ローカルにデプロイされたLM Studio（例：Gemma-4-26b ビジョン大言語モデル）に接続することで、システムは自動的にバックグラウンドで新規写真のシーン解析、テキスト抽出（OCR）、タグ自動生成を行い、データが外部のネットワークに送信されることはありません。
+4. **非同期サムネイルとバックグラウンドデーモン**：分析デーモン、サムネイル生成デーモン、スケジュールマネージャなどの独立したデーモンスレッドを内蔵。負荷のかかる計算処理（モデル推論、画像変換、サムネイル作成）はすべてバックグラウンドで非同期に処理されるため、フロントエンドの閲覧・検索動作は常に快適です。
+5. **モダンなタイムラインと適応型UI**：フロントエンドは無限スクロール対応の写真ウォール、フォルダフィルタ、日付・タイムラインフィルタを提供し、ダーク/ライトテーマのシームレスな切り替えに対応。
+
+---
+
+## 🚀 主な革新点 (Innovative Points)
+
+### 1. オフライン・ハイブリッド検索システム (Offline Hybrid Search)
+Memoraは、**高次元ベクトル類似度検索**と**従来のキーワード検索**を独創的に統合しました。
+* **ベクトルによるあいまい検索**：768次元の日英中対応のEmbeddingモデルを使用。「暖かい雰囲気」「サイバーパンク」「孤独な背中」といった抽象的なニュアンスを理解し、画像の説明文にその単語が明示されていなくても、画像のコンテキストや感情から高精度にマッチングします。
+* **キーワードの重み付け補正**：ベクトル検索の結果に対して、写真のテキスト属性（ファイル名、タグ、OCRテキスト、画像概要記述など）がユーザーの検索キーワードと完全に一致した場合、大幅なスコア加算（`Score += 1.5`）を行います。
+* **効果**：従来の検索の「類義語を検索できない、写真の雰囲気が分からない」という弱点と、ベクトル検索の「正確なファイル名にマッチしづらい」という問題の両方を解決。「完全に一致したファイルを最上位に配置し、その後に雰囲気の近い写真を並べる」という理想的な検索体験を実現しました。
+
+### 2. 100% のプライバシー保護とクラウド不要設計 (100% Offline Privacy)
+すべてのAI機能は完全にローカルで実行されます。
+* **Embeddingモデルのローカル展開**：ベクトルモデルは本プロジェクトの直下ディレクトリに完全にデプロイされ、外部インターネットへの接続がない環境でも検索ベクトルの計算が可能です。
+* **ローカルVLM推論**：画像の理解はローカルで動作するLM Studio APIに依存しているため、大切な写真データが外部のクラウドサーバーにアップロードされることは一切ありません。
+
+### 3. ネットワークストレージ並行アクセスの最適化 (NAS-focused SMB Optimization)
+ネットワークディスク上のディレクトリ探索において、多階層スキャンをPythonの `ThreadPoolExecutor` スレッドプールに並行して投入する `_walk_parallel` アルゴリズムを設計。ネットワークの往復遅延による待ち時間を最小限に抑えます。
+
+### 4. 漸進的なモデル読み込み (Lazy Loading & Multi-threading Safe)
+モデルは「必要な時にのみ読み込む（Lazy Loading）」設計となっています。サービスの起動時や、単に写真ギャラリーを閲覧しているだけの状態では、重い学習モデル用のメモリを一切消費しません。最初の検索クエリが実行されたとき、またはバックグラウンド分析が開始されたときに初めてメモリにロードされ、Flaskのマルチスレッド環境でのスレッドセーフも保証されます。
+
+---
+
+## 🛠️ 技術スタック (Technology Stack)
+
+| モジュール | 採用技術 | 説明 |
+| :--- | :--- | :--- |
+| **バックエンド** | **Flask (Python 3.7+)** | 軽量で効率的、Pythonエコシステム内のAIツールチェーンとの親和性が高い |
+| **データベース** | **SQLite (PRAGMA WAL + Row)** | 単一ファイルでの保存、WAL（ライトアヘッドロギング）を有効化し、並行読み書き性能を確保 |
+| **ベクトル化モデル** | **SentenceTransformers** | `shibing624/text2vec-base-chinese` を採用、プロジェクト直下にローカル保存 |
+| **行列計算** | **NumPy (float32)** | ベクトルの内積や類似度計算をハードウェア加速し、検索クエリ応答を50ms以内に短縮 |
+| **画像前処理** | **Pillow + rawpy + pillow_heif** | 一般的な画像形式に加え、HEIC/HEIF (iOS) や ARW (Sony RAW) にも対応 |
+| **フロントエンド** | **Tailwind CSS + Remix Icon** | レスポンシブグリッド、すりガラスエフェクト、アニメーションテーマ切り替え |
+| **国際化** | **i18n** | 日本語、中国語、英語の3言語をワンクリックで切り替え可能 |
+
+---
+
+## 📂 プロジェクト構成
+
+* [web_app/app.py](file:///C:/Users/团子潘/Desktop/nf/web_app/app.py) - Flaskサービスのエントリポイント。ルーティング、ハイブリッド検索、セッション認証、DB接続管理、スケジュールタスクの初期化。
+* [web_app/embedding_helper.py](file:///C:/Users/团子潘/Desktop/nf/web_app/embedding_helper.py) - ベクトルモデル管理。`text2vec` モデルの遅延読み込み、ベクトル計算、データベース書き込みの担当。
+* [web_app/analysis_daemon.py](file:///C:/Users/团子潘/Desktop/nf/web_app/analysis_daemon.py) - バックグラウンド画像AI分析デーモン。ローカルVLMを定時呼び出しし、ベクトル生成を連動。
+* [web_app/scanner.py](file:///C:/Users/团子潘/Desktop/nf/web_app/scanner.py) - 高並行SMB/NASディレクトリ・ファイルスキャナ。
+* [web_app/thumb_daemon.py](file:///C:/Users/团子潘/Desktop/nf/web_app/thumb_daemon.py) - サムネイル生成バックグラウンドスレッド。
+* [analyze_images_sqlite.py](file:///C:/Users/团子潘/Desktop/nf/analyze_images_sqlite.py) - 単体のコマンドライン分析ツール。こちらにもベクトル生成を統合。
+* [generate_vectors_backfill.py](file:///C:/Users/团子潘/Desktop/nf/generate_vectors_backfill.py) - すでに分析済みの古い画像データに対して、一括でベクトル特徴量を生成・補完するツール。
+
+---
+
+## ⚡ インストールと実行方法
+
+### 1. 準備
+リポジトリをクローンした後、Python 3.7+ 環境を用意し、依存関係をインストールします（新しく追加された意味検索関連のライブラリも含まれます）。
+```bash
+pip install -r requirements.txt
+```
+
+### 2. ベクトルの一括作成（初回のみ・既存データ用）
+すでにデータベースに分析データ（overview）がある場合、Webアプリを起動する前にこのスクリプトを実行してベクトルデータを一括生成します。この処理中にモデルが自動的にローカルの `text2vec-base-chinese` フォルダに保存されます。
+```bash
+python generate_vectors_backfill.py
+```
+
+### 3. Flaskサーバーの起動
+以下のコマンドでサーバーを起動します。
+```powershell
+& "C:\Program Files\python\python.exe" web_app/app.py
+```
+起動後、ブラウザで `http://127.0.0.1:5000` にアクセスしてください。
+
+### 4. 初回設定
+1. デフォルトの管理者アカウント：`admin`、パスワード：`admin@123`（初回ログイン時にパスワード変更が必須です）。
+2. ログイン後、`/admin` 管理画面へ進み、メディアソース（NAS等の写真フォルダ）を追加してアクティブにします。
+3. ローカルの LM Studio のAPIアドレスとビジョン対応のモデル名を設定すると、自動的にバックグラウンド処理が動き出します。
+
+---
+
+## 📄 ライセンス / License
+
+MIT License

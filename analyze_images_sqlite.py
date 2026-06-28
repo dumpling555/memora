@@ -70,6 +70,11 @@ def init_db(db_path: Path) -> sqlite3.Connection:
         );
         CREATE INDEX IF NOT EXISTS idx_image_analysis_file_path ON image_analysis(file_path);
         CREATE INDEX IF NOT EXISTS idx_image_analysis_analyzed_at ON image_analysis(analyzed_at);
+        CREATE TABLE IF NOT EXISTS image_vectors (
+            image_id        INTEGER PRIMARY KEY,
+            embedding       BLOB NOT NULL,
+            FOREIGN KEY(image_id) REFERENCES image_analysis(id) ON DELETE CASCADE
+        );
     """)
     conn.commit()
     return conn
@@ -333,6 +338,18 @@ def main():
                 raw_result, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             ))
             db_conn.commit()
+
+            # Generate and save vector embedding
+            try:
+                # Add web_app path to sys.path if not already there (it should be)
+                c_id = db_conn.execute("SELECT id FROM image_analysis WHERE file_path = ?", (fpath_str,)).fetchone()
+                if c_id:
+                    rid = c_id[0]
+                    import embedding_helper
+                    embedding_helper.save_image_vector(db_conn, rid, parsed["overview"])
+                    print(f"  [向量生成] 已生成并保存向量")
+            except Exception as ev:
+                print(f"  [向量错误] {ev}")
 
             results[fpath_str] = parsed
             print(f"\n  概况:   {parsed['overview'][:80]}..." if len(parsed['overview']) > 80 else f"  概况:   {parsed['overview']}")

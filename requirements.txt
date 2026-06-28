@@ -5,3 +5,5 @@ rawpy
 requests
 werkzeug
 tqdm
+sentence-transformers
+numpy

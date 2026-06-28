@@ -131,6 +131,12 @@ class AnalysisDaemon:
                 parsed["overview"], parsed["extracted_text"], parsed["other_info"],
                 raw, now_str, rid,
             ))
+            try:
+                import embedding_helper
+                embedding_helper.save_image_vector(conn, rid, parsed["overview"])
+                print(f"[analysis_daemon] Vector saved for image #{rid}")
+            except Exception as ev:
+                print(f"[analysis_daemon] Failed to save vector for image #{rid}: {ev}")
         conn.commit()
 
         analyzed_ids = [r[0] for r in results]
