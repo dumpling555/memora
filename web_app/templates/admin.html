@@ -156,6 +156,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
                 <i class="ri-add-line"></i> <span data-i18n="sources.add">Add Source</span>
             </button>
         </div>
+        <div class="text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-lg border border-slate-100 leading-relaxed" data-i18n="sources.description">
+            Configure and manage the system's media source folders. You can add local or network share paths, test their connectivity, and initiate file scans to index your photos.
+        </div>
         <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -186,6 +189,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
             <button onclick="loadFolderTree()" class="px-3 py-1.5 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
                 <i class="ri-refresh-line"></i> <span data-i18n="folders.refresh">Refresh</span>
             </button>
+        </div>
+        <div class="text-xs text-slate-500 mb-4 bg-slate-50/70 p-3 rounded-lg border border-slate-100 leading-relaxed" data-i18n="folders.description">
+            Control the visibility of each folder in the gallery. Unchecked folders and the photos within them will be hidden from the main gallery view, useful for hiding private or irrelevant folders.
         </div>
         <div class="bg-white/60 backdrop-blur-md rounded-xl shadow-sm border border-white/70 p-4 min-h-[200px]">
             <div id="fv-tree-container" class="folder-tree text-sm text-slate-600">
@@ -248,7 +254,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-600 mb-1" data-i18n="llm.api_url">API Base URL</label>
-                    <input id="llm-api-url" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="e.g. http://localhost:1234/v1">
+                    <input id="llm-api-url" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="e.g. http://172.18.18.100:1234/v1">
                     <p class="text-xs text-slate-400 mt-1" data-i18n="llm.api_url_hint">LM Studio or compatible local API base URL.</p>
                 </div>
                 <div>
@@ -257,10 +263,16 @@ button:active:not(:disabled) { transform: scale(0.97); }
                     <p class="text-xs text-slate-400 mt-1" data-i18n="llm.model_name_hint">The identifier of the active loaded model.</p>
                 </div>
             </div>
-            <div class="flex justify-end pt-2">
-                <button id="save-llm-btn" onclick="saveLlmSettings()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm">
-                    <i class="ri-save-line"></i> <span data-i18n="llm.save">Save Settings</span>
-                </button>
+            <div class="flex justify-between items-center pt-2">
+                <div id="llm-test-result" class="text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="test-llm-btn" onclick="testLlmConnection()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 border border-slate-200 transition-colors flex items-center gap-1.5 shadow-sm">
+                        <i class="ri-pulse-line"></i> <span data-i18n="llm.test">Test Connection</span>
+                    </button>
+                    <button id="save-llm-btn" onclick="saveLlmSettings()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm">
+                        <i class="ri-save-line"></i> <span data-i18n="llm.save">Save Settings</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -353,7 +365,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
     </div>
 </div>
 
-<script src="/static/js/i18n.js"></script>
+<script src="/static/js/i18n.js?v=3"></script>
 <script src="/static/js/theme.js"></script>
 <script>
 // ================================
@@ -1002,6 +1014,7 @@ async function loadLlmSettings() {
 async function saveLlmSettings() {
     const api_url = document.getElementById('llm-api-url').value.trim();
     const model_name = document.getElementById('llm-model-name').value.trim();
+
     if (!api_url || !model_name) {
         showToast('API URL and Model Name are required', 'error');
         return;
@@ -1031,6 +1044,43 @@ async function saveLlmSettings() {
     }
 }
 
+async function testLlmConnection() {
+    const api_url = document.getElementById('llm-api-url').value.trim();
+    const model_name = document.getElementById('llm-model-name').value.trim();
+    const resultEl = document.getElementById('llm-test-result');
+    const btn = document.getElementById('test-llm-btn');
+
+    if (!api_url || !model_name) {
+        resultEl.innerHTML = '<span class="text-red-500 font-medium"><i class="ri-close-line"></i> 请先填写接口地址和模型名称！</span>';
+        showToast('API URL and Model Name are required', 'error');
+        return;
+    }
+
+    resultEl.innerHTML = '<span class="text-slate-400"><i class="ri-loader-4-line animate-spin"></i> 测试中...</span>';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/admin/api/settings/llm/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': _csrfToken
+            },
+            body: JSON.stringify({ api_url, model_name })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            resultEl.innerHTML = `<span class="text-green-600 font-medium"><i class="ri-check-line"></i> ${esc(data.message)}</span>`;
+        } else {
+            resultEl.innerHTML = `<span class="text-red-500 font-medium"><i class="ri-close-line"></i> ${esc(data.message)}</span>`;
+        }
+    } catch (e) {
+        resultEl.innerHTML = `<span class="text-red-500 font-medium"><i class="ri-close-line"></i> 连接失败: ${esc(e.message)}</span>`;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // ================================
 // Utility
 // ================================
@@ -1044,11 +1094,14 @@ function esc(s) {
 // ================================
 // Init
 // ================================
-i18n.init();
-themeManager.init();
-updateLangIndicator(i18n.getLang());
-loadSources();
-fetchCsrfToken();
+async function initPage() {
+    i18n.init();
+    themeManager.init();
+    updateLangIndicator(i18n.getLang());
+    await fetchCsrfToken();
+    loadSources();
+}
+initPage();
 </script>
 </body>
 </html>

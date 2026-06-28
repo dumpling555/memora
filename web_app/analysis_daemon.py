@@ -60,8 +60,12 @@ class AnalysisDaemon:
     def _process_pending(self):
         from ai_helper import (
             prepare_image, image_to_b64, analyze_image_with_lmstudio,
-            parse_claude_result, call_tag_lm, extract_tags,
+            parse_claude_result, call_tag_lm, extract_tags, get_llm_config,
         )
+
+        api_url, model_name = get_llm_config()
+        if not api_url or not model_name:
+            return
 
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()

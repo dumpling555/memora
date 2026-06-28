@@ -768,7 +768,7 @@ def get_llm_settings():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT key, value FROM admin_settings WHERE key IN ('llm_api_url', 'llm_model_name')")
-    settings = {'api_url': 'http://172.18.18.100:1234/v1', 'model_name': 'google/gemma-4-26b-a4b'}
+    settings = {'api_url': '', 'model_name': ''}
     for key, value in cursor.fetchall():
         if key == 'llm_api_url':
             settings['api_url'] = value
@@ -784,10 +784,8 @@ def save_llm_settings():
     api_url = (data.get('api_url') or '').strip()
     model_name = (data.get('model_name') or '').strip()
 
-    if not api_url:
-        return jsonify({'error': 'API URL is required'}), 400
-    if not model_name:
-        return jsonify({'error': 'Model Name is required'}), 400
+    if not api_url or not model_name:
+        return jsonify({'error': 'API URL and Model Name are required'}), 400
 
     conn = get_db()
     conn.execute("""
@@ -801,5 +799,40 @@ def save_llm_settings():
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
+
+
+@admin_bp.route('/api/settings/llm/test', methods=['POST'])
+def test_llm_settings():
+    import requests
+    data = request.get_json()
+    api_url = (data.get('api_url') or '').strip()
+    model_name = (data.get('model_name') or '').strip()
+
+    if not api_url or not model_name:
+        return jsonify({'ok': False, 'message': 'API URL and Model Name are required'}), 400
+
+    comp_url = f"{api_url.rstrip('/')}/chat/completions"
+    try:
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 5
+        }
+        resp = requests.post(comp_url, json=payload, headers={"Content-Type": "application/json"}, timeout=5.0)
+        if resp.status_code == 200:
+            res_data = resp.json()
+            try:
+                reply = res_data['choices'][0]['message']['content']
+                return jsonify({'ok': True, 'message': f'连接成功！模型回复: "{reply.strip()}"'})
+            except Exception:
+                return jsonify({'ok': True, 'message': '连接成功！已获取响应。'})
+        else:
+            return jsonify({'ok': False, 'message': f'接口返回错误状态码 {resp.status_code}: {resp.text}'})
+    except requests.exceptions.Timeout:
+        return jsonify({'ok': False, 'message': '连接超时（限制5秒），请检查地址或服务状态。'})
+    except requests.exceptions.ConnectionError:
+        return jsonify({'ok': False, 'message': f'无法连接到 {api_url}，请确认本地模型服务是否已启动。'})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'发生错误: {str(e)}'})
 
 

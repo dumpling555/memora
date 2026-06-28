@@ -41,42 +41,10 @@ def parse_claude_result(text: str) -> dict:
     return sections
 
 def prepare_image(image_path: str) -> tuple:
-    """Read and preprocess an image, returning (image_data, media_type, width, height)."""
-    with open(image_path, "rb") as f:
-        image_data = f.read()
-
-    media_type_orig = None
-    # Detect HEIC/HEIF
-    if len(image_data) > 12 and image_data[4:8] == b"ftyp":
-        brand = image_data[8:12]
-        if brand in (b"mif1", b"heic", b"hevx", b"heim", b"heis", b"hevs", b"hif1", b"avif", b"av1f"):
-            try:
-                import pillow_heif
-                pillow_heif.register_heif_opener()
-                img = Image.open(image_path)
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=95)
-                buf.seek(0)
-                image_data = buf.read()
-                media_type_orig = "image/jpeg"
-                print(f"  [HEIC] Converted to JPEG ({len(image_data)} bytes)")
-            except Exception as e:
-                print(f"  [Warning] HEIC conversion failed: {e}, sending raw format")
-
+    """Read and preprocess an image, converting it to a standard 3-channel RGB JPEG format."""
     ext = Path(image_path).suffix.lower()
-    media_type_map = {
-        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".bmp": "image/bmp", ".gif": "image/gif", ".tiff": "image/tiff",
-        ".tif": "image/tiff", ".webp": "image/webp",
-    }
-    media_type = media_type_map.get(ext, "image/png")
-    if media_type_orig:
-        media_type = media_type_orig
 
-    # Detect ARW (Sony RAW)
-    is_arw = False
+    # Special handling for Sony RAW (ARW)
     if ext == ".arw":
         try:
             import rawpy
@@ -85,21 +53,40 @@ def prepare_image(image_path: str) -> tuple:
                 rgb = raw.postprocess(params)
                 img = Image.fromarray(rgb, mode="RGB")
                 w, h = img.size
+                
+                # Resize if necessary
+                MAX_WIDTH = 1920
+                if w > MAX_WIDTH:
+                    ratio = MAX_WIDTH / w
+                    w = int(w * ratio)
+                    h = int(h * ratio)
+                    img = img.resize((w, h), Image.LANCZOS)
+                
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=95)
                 buf.seek(0)
                 image_data = buf.read()
-                media_type = "image/jpeg"
-                is_arw = True
-                print(f"  [ARW] Converted to JPEG ({len(image_data)} bytes)")
+                print(f"  [ARW] Decoded and converted to JPEG ({w}x{h}, {len(image_data)} bytes)")
+                return image_data, "image/jpeg", w, h
         except Exception as e:
-            print(f"  [Warning] ARW decode failed: {e}")
-            is_arw = False
+            print(f"  [Warning] ARW decode failed: {e}, falling back to standard loader")
 
-    if not is_arw:
-        # Resize large image
-        img_buf = io.BytesIO(image_data)
-        img = Image.open(img_buf)
+    # Special handling for HEIC/HEIF
+    if ext in (".heic", ".heif"):
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except Exception as e:
+            print(f"  [Warning] pillow_heif register failed: {e}")
+
+    # Standard loader using PIL
+    try:
+        img = Image.open(image_path)
+        
+        # Always convert to RGB mode to drop alpha channel (RGBA/PNG) and index color palettes (GIF/BMP)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+            
         w, h = img.size
         MAX_WIDTH = 1920
         if w > MAX_WIDTH:
@@ -107,22 +94,30 @@ def prepare_image(image_path: str) -> tuple:
             new_w = int(w * ratio)
             new_h = int(h * ratio)
             img = img.resize((new_w, new_h), Image.LANCZOS)
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=85)
-            buf.seek(0)
-            image_data = buf.read()
-            print(f"  Resize: {w}x{h} -> {new_w}x{new_h}, {len(image_data)} bytes")
+            w, h = new_w, new_h
 
-    return image_data, media_type, w, h
+        # Always save as JPEG to guarantee a 3-channel compressed representation compatible with VLM
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        image_data = buf.read()
+        
+        return image_data, "image/jpeg", w, h
+    except Exception as e:
+        # Extreme fallback: just read raw bytes
+        print(f"  [Warning] PIL prepare failed: {e}, falling back to raw file bytes")
+        with open(image_path, "rb") as f:
+            raw_data = f.read()
+        return raw_data, "image/jpeg", 0, 0
 
 def image_to_b64(image_data: bytes) -> str:
     return base64.b64encode(image_data).decode("utf-8")
 
 def get_llm_config():
-    """Load LLM settings from the database, falling back to hardcoded defaults."""
+    """Load LLM settings from the database."""
     db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'res.sqlite')
-    api_url = "http://172.18.18.100:1234/v1"
-    model_name = "google/gemma-4-26b-a4b"
+    api_url = None
+    model_name = None
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
@@ -141,6 +136,8 @@ def get_llm_config():
 def analyze_image_with_lmstudio(image_b64: str, media_type: str, max_retries: int = 3) -> str:
     """Analyze image using LM Studio local endpoint."""
     base_url, model_name = get_llm_config()
+    if not base_url or not model_name:
+        raise ValueError("Local LLM is not configured. Analysis skipped.")
     api_url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -207,6 +204,8 @@ def analyze_image_with_lmstudio(image_b64: str, media_type: str, max_retries: in
 def call_tag_lm(overviews: list, max_retries: int = 3) -> str:
     """Call LM Studio to generate Chinese tags from overviews in batch."""
     base_url, model_name = get_llm_config()
+    if not base_url or not model_name:
+        return ""
     api_url = f"{base_url.rstrip('/')}/chat/completions"
     lines = []
     for rid, fname, overview in overviews:

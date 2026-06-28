@@ -120,8 +120,6 @@ def _init_admin_db():
 
     # Seed admin settings - scheduler enabled by default for auto quick-scan
     c.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('scheduler_enabled', '1')")
-    c.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('llm_api_url', 'http://172.18.18.100:1234/v1')")
-    c.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('llm_model_name', 'google/gemma-4-26b-a4b')")
 
     # Seed initial admin credentials if not set
     c.execute("SELECT value FROM admin_settings WHERE key='admin_username'")
@@ -354,6 +352,8 @@ def api_change_password():
 
 @app.route('/api/csrf-token')
 def api_csrf_token():
+    if 'csrf_token' not in session and session.get('logged_in'):
+        session['csrf_token'] = secrets.token_hex(32)
     return jsonify({'token': session.get('csrf_token', '')})
 
 
