@@ -3,148 +3,351 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Photo Gallery</title>
+<title>Memora — Intelligent Photo Gallery & Semantic Search</title>
 <script src="/static/js/tailwind.js"></script>
 <link rel="stylesheet" href="/static/css/remixicon.css">
 <script src="/static/js/i18n.js?v=3"></script>
 <script src="/static/js/theme.js"></script>
 <style>
-:root { --spring: cubic-bezier(0.16, 1, 0.3, 1); --spring-slow: cubic-bezier(0.22, 1, 0.36, 1); }
-body { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); font-family: 'Inter', system-ui, sans-serif; margin: 0; min-height: 100vh; }
-html.dark body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
-.glass-card { background: rgba(255,255,255,0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.5); border-radius: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,.15); animation: cardIn 0.5s var(--spring); }
-html.dark .glass-card { background: rgba(30,41,59,0.75); border-color: rgba(51,65,85,0.5); }
-@keyframes cardIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes shakeIn { 0% { opacity: 0; transform: translateX(-4px); } 60% { transform: translateX(4px); } 100% { opacity: 1; transform: translateX(0); } }
-.feat-card { background: rgba(255,255,255,0.55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); border-radius: 1.25rem; padding: 1.5rem; transition: all 0.3s var(--spring); cursor: default; animation: fadeUp 0.6s var(--spring) both; }
-.feat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px -8px rgba(0,0,0,.1); }
-html.dark .feat-card { background: rgba(30,41,59,0.55); border-color: rgba(51,65,85,0.4); }
-.login-input { width: 100%; padding: 0.75rem 1rem; border: 1px solid rgba(0,0,0,.08); border-radius: 0.75rem; font-size: 0.925rem; outline: none; transition: all 0.25s var(--spring); background: rgba(255,255,255,0.6); box-sizing: border-box; color: #1e293b; }
-.login-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); background: rgba(255,255,255,0.85); }
-html.dark .login-input { background: rgba(15,23,42,0.6); border-color: rgba(71,85,105,0.4); color: #e2e8f0; }
-html.dark .login-input:focus { background: rgba(15,23,42,0.85); border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.12); }
-.login-btn { width: 100%; padding: 0.75rem; border: none; border-radius: 0.75rem; font-size: 0.95rem; font-weight: 600; background: #2563eb; color: white; cursor: pointer; transition: all 0.2s var(--spring); }
-.login-btn:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.3); }
-.login-btn:active { transform: scale(0.97); }
-.login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-.error-msg { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.15); border-radius: 0.75rem; padding: 0.6rem 1rem; color: #dc2626; font-size: 0.85rem; display: none; margin-bottom: 1rem; animation: shakeIn 0.35s var(--spring); }
-html.dark .error-msg { color: #fca5a5; }
+:root { 
+    --spring: cubic-bezier(0.16, 1, 0.3, 1); 
+    --spring-slow: cubic-bezier(0.22, 1, 0.36, 1); 
+    --neon-blue: #06b6d4;
+    --neon-purple: #a855f7;
+    --neon-glow-rgb: 99, 102, 241;
+}
+body { 
+    background: radial-gradient(circle at 10% 20%, #f8fafc 0%, #f1f5f9 40%, #e2e8f0 100%); 
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif; 
+    margin: 0; 
+    min-height: 100vh; 
+    color: #1e293b;
+    overflow-x: hidden;
+}
+html.dark body { 
+    background: radial-gradient(circle at 10% 20%, #030712 0%, #0b0f19 50%, #020617 100%); 
+    color: #f1f5f9;
+}
+
+/* Glassmorphism base */
+.glass-panel { 
+    background: rgba(255, 255, 255, 0.7); 
+    backdrop-filter: blur(24px); 
+    -webkit-backdrop-filter: blur(24px); 
+    border: 1px solid rgba(255, 255, 255, 0.45); 
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.08);
+}
+html.dark .glass-panel { 
+    background: rgba(17, 24, 39, 0.65); 
+    border-color: rgba(51, 65, 85, 0.35); 
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.4);
+}
+
+/* AI Agentic Glow FX */
+.glow-orb {
+    position: absolute;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    z-index: 0;
+    pointer-events: none;
+}
+html.dark .glow-orb {
+    opacity: 0.22;
+}
+
+/* Features animations */
+@keyframes cardIn { 
+    from { opacity: 0; transform: scale(0.96) translateY(15px); } 
+    to { opacity: 1; transform: scale(1) translateY(0); } 
+}
+@keyframes glowBorder {
+    0%, 100% { border-color: rgba(168, 85, 247, 0.2); }
+    50% { border-color: rgba(6, 182, 212, 0.5); }
+}
+
+.agent-feature-card {
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 1.25rem;
+    transition: all 0.4s var(--spring);
+}
+html.dark .agent-feature-card {
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.agent-feature-card:hover {
+    transform: translateY(-5px) scale(1.01);
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 15px 35px -10px rgba(99, 102, 241, 0.15);
+}
+html.dark .agent-feature-card:hover {
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(168, 85, 247, 0.35);
+    box-shadow: 0 15px 35px -10px rgba(168, 85, 247, 0.25);
+}
+
+/* Input Fields */
+.login-input { 
+    width: 100%; 
+    padding: 0.875rem 1.25rem; 
+    border: 1px solid rgba(0, 0, 0, 0.08); 
+    border-radius: 0.875rem; 
+    font-size: 0.95rem; 
+    outline: none; 
+    transition: all 0.3s var(--spring); 
+    background: rgba(255, 255, 255, 0.5); 
+    box-sizing: border-box; 
+    color: #0f172a; 
+}
+.login-input:focus { 
+    border-color: #6366f1; 
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); 
+    background: rgba(255, 255, 255, 0.95); 
+}
+html.dark .login-input { 
+    background: rgba(3, 7, 18, 0.45); 
+    border-color: rgba(71, 85, 105, 0.35); 
+    color: #f1f5f9; 
+}
+html.dark .login-input:focus { 
+    background: rgba(3, 7, 18, 0.8); 
+    border-color: #a855f7; 
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2); 
+}
+
+/* Glowing Button */
+.login-btn { 
+    width: 100%; 
+    padding: 0.875rem; 
+    border: none; 
+    border-radius: 0.875rem; 
+    font-size: 0.975rem; 
+    font-weight: 600; 
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); 
+    color: white; 
+    cursor: pointer; 
+    transition: all 0.3s var(--spring); 
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+}
+html.dark .login-btn {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); 
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.25);
+}
+.login-btn:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); 
+}
+html.dark .login-btn:hover {
+    box-shadow: 0 8px 25px rgba(168, 85, 247, 0.45);
+}
+.login-btn:active { 
+    transform: scale(0.975) translateY(0); 
+}
+.login-btn:disabled { 
+    opacity: 0.6; 
+    cursor: not-allowed; 
+    transform: none !important; 
+    box-shadow: none !important;
+}
+
+.error-msg { 
+    background: rgba(239, 68, 68, 0.08); 
+    border: 1px solid rgba(239, 68, 68, 0.2); 
+    border-radius: 0.875rem; 
+    padding: 0.75rem 1.25rem; 
+    color: #ef4444; 
+    font-size: 0.875rem; 
+    display: none; 
+    margin-bottom: 1rem; 
+}
+html.dark .error-msg { 
+    color: #fca5a5; 
+    background: rgba(239, 68, 68, 0.15);
+}
+
 html.dark .dark-hide { display: none; }
 html.dark .dark-show { display: inline-block !important; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 </style>
 </head>
-<body>
+<body class="relative min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+
+<!-- Background Agentic Orbs -->
+<div class="glow-orb bg-indigo-500 top-10 left-10"></div>
+<div class="glow-orb bg-purple-500 bottom-10 right-10"></div>
 
 <!-- Theme toggle floating -->
 <div class="fixed top-6 right-6 z-50">
-    <button onclick="themeManager.toggle()" class="w-10 h-10 rounded-xl glass-card flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors cursor-pointer">
-        <i class="ri-sun-line text-lg dark-hide"></i>
-        <i class="ri-moon-line text-lg dark-show hidden"></i>
+    <button onclick="themeManager.toggle()" class="w-11 h-11 rounded-2xl glass-panel flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-all cursor-pointer">
+        <i class="ri-sun-line text-xl dark-hide"></i>
+        <i class="ri-moon-line text-xl dark-show hidden"></i>
     </button>
 </div>
 
-<div class="max-w-5xl mx-auto px-6 py-16 md:py-24">
-
-    <!-- Hero -->
-    <div class="glass-card p-10 md:p-14 text-center mb-12">
-        <div class="w-16 h-16 rounded-2xl bg-blue-500 flex items-center justify-center mx-auto mb-6" style="box-shadow: 0 8px 24px rgba(37,99,235,.25);">
-            <i class="ri-image-2-line text-white text-3xl"></i>
+<div class="w-full max-w-6xl z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch my-auto">
+    
+    <!-- Left Column: Branding, Utility, Features, AI Agentic Showcase -->
+    <div class="lg:col-span-7 flex flex-col justify-center space-y-8 pr-0 lg:pr-6">
+        
+        <!-- Logo and Brand -->
+        <div class="flex items-center space-x-4 animate-fade-in">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 dark:from-purple-500 dark:to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <i class="ri-cpu-line text-white text-3xl"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Memora</h1>
+                <p class="text-sm font-semibold text-indigo-600 dark:text-cyan-400">AI Agentic Photo Archive System</p>
+            </div>
         </div>
-        <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-3">Photo Gallery</h1>
-        <p class="text-lg text-slate-500 mb-2">Your NAS photo library, intelligently organized</p>
-        <p class="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-            Centralize photos from your NAS, sync new files in real time, 
-            auto-generate thumbnails, and browse with a beautiful glass interface.
-            One login to manage and view your entire collection.
+
+        <!-- Description -->
+        <div class="space-y-4">
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800 dark:text-slate-100 leading-tight">
+                智能相册，意境由心
+            </h2>
+            <p class="text-base sm:text-lg text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                Memora 是一款私有化、轻量级的个人 NAS 智能图库系统。结合本地深度学习算法，让您的照片归档与场景检索步入“主动感知”的 Agent 时代。
+            </p>
+        </div>
+
+        <!-- Features Showcase Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Feature 1: Semantic Search -->
+            <div class="agent-feature-card p-5 flex space-x-4">
+                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="ri-compass-3-line text-2xl"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">语义化搜索 (Semantic)</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">支持“温暖的氛围”、“科技感”、“开心”等意境模糊匹配。精确文字优先，氛围意境融合。</p>
+                </div>
+            </div>
+
+            <!-- Feature 2: 100% Privacy -->
+            <div class="agent-feature-card p-5 flex space-x-4">
+                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <i class="ri-shield-keyhole-line text-2xl"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">完全离线隐私 (100% Offline)</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">本地 768 维特征模型部署，VLM 视觉描述与 OCR 运行于本地局域网，数据绝不上云。</p>
+                </div>
+            </div>
+
+            <!-- Feature 3: Scan Engine -->
+            <div class="agent-feature-card p-5 flex space-x-4">
+                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-cyan-100 dark:bg-cyan-950/50 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
+                    <i class="ri-archive-line text-2xl"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">并发扫描守护 (SMB Parallel)</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">线程池并发挂载扫描，支持增量/全量同步。独立守护线程处理重负载，操作零延迟。</p>
+                </div>
+            </div>
+
+            <!-- Feature 4: Raw & HEIC supports -->
+            <div class="agent-feature-card p-5 flex space-x-4">
+                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <i class="ri-sparkling-line text-2xl"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">全格式兼容与无感渲染</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">内置转换引擎，无缝兼容苹果 HEIC/HEIF 照片与专业相机 ARW(RAW) 格式渲染浏览。</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right Column: Login Form glass card -->
+    <div class="lg:col-span-5 flex flex-col justify-center">
+        <div class="glass-panel p-8 sm:p-10 rounded-3xl w-full max-w-md mx-auto relative overflow-hidden" style="animation: cardIn 0.5s var(--spring);">
+            
+            <div class="text-center mb-8 relative z-10">
+                <h2 class="text-2xl font-bold tracking-tight text-slate-800 dark:text-white">系统登录 / Sign In</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">使用管理员凭证登录并管理图库</p>
+            </div>
+
+            <form id="login-form" onsubmit="return doLogin(event)" class="space-y-5 relative z-10">
+                <div id="login-error" class="error-msg"></div>
+                
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <i class="ri-user-3-line text-lg"></i>
+                    </span>
+                    <input id="login-user" type="text" class="login-input pl-11" placeholder="用户名" required autofocus>
+                </div>
+
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <i class="ri-lock-line text-lg"></i>
+                    </span>
+                    <input id="login-pw" type="password" class="login-input pl-11" placeholder="密码" required>
+                </div>
+
+                <button type="submit" class="login-btn mt-2" id="login-submit">登 录</button>
+            </form>
+
+            <div class="flex items-center justify-center space-x-2 mt-6 text-xs text-slate-400 dark:text-slate-500">
+                <i class="ri-shield-check-line text-base text-indigo-500 dark:text-purple-400"></i>
+                <span>安全会话校验 · 密钥端点保护</span>
+            </div>
+
+        </div>
+        
+        <!-- Bottom info -->
+        <p class="text-center text-xs text-slate-400 dark:text-slate-600 mt-6 font-medium">
+            Memora Photo Archive &mdash; Local Edge AI Engine
         </p>
     </div>
 
-    <!-- Features grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-        <div class="feat-card" style="animation-delay:0.1s">
-            <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mb-3">
-                <i class="ri-nas-line text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-slate-700 text-sm mb-1">NAS Integration</h3>
-            <p class="text-xs text-slate-500 leading-relaxed">Direct SMB support for Synology, QNAP, and Windows shares with automatic sync.</p>
-        </div>
-        <div class="feat-card" style="animation-delay:0.2s">
-            <div class="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600 mb-3">
-                <i class="ri-image-line text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-slate-700 text-sm mb-1">HEIC Support</h3>
-            <p class="text-xs text-slate-500 leading-relaxed">Apple HEIC photos automatically converted to JPEG for seamless browser viewing.</p>
-        </div>
-        <div class="feat-card" style="animation-delay:0.3s">
-            <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 mb-3">
-                <i class="ri-flashlight-line text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-slate-700 text-sm mb-1">Real-time Sync</h3>
-            <p class="text-xs text-slate-500 leading-relaxed">New photos detected within 60 seconds; thumbnails and metadata generated instantly.</p>
-        </div>
-        <div class="feat-card" style="animation-delay:0.4s">
-            <div class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 mb-3">
-                <i class="ri-window-line text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-slate-700 text-sm mb-1">Glass UI</h3>
-            <p class="text-xs text-slate-500 leading-relaxed">Frosted-glass design with Apple-style spring animations and dark mode support.</p>
-        </div>
-    </div>
-
-    <!-- Login card -->
-    <div class="glass-card p-8 max-w-md mx-auto" id="login-section">
-        <div class="text-center mb-6">
-            <h2 class="text-xl font-bold text-slate-800">Sign In</h2>
-            <p class="text-sm text-slate-500 mt-1">Enter your credentials to manage your gallery</p>
-        </div>
-
-        <form id="login-form" onsubmit="return doLogin(event)">
-            <div id="login-error" class="error-msg"></div>
-            <div class="mb-4">
-                <input id="login-user" type="text" class="login-input" placeholder="Username" required autofocus>
-            </div>
-            <div class="mb-4">
-                <input id="login-pw" type="password" class="login-input" placeholder="Password" required>
-            </div>
-            <button type="submit" class="login-btn" id="login-submit">Login</button>
-        </form>
-
-        <p class="text-xs text-slate-400 text-center mt-4">
-            <i class="ri-shield-check-line mr-1"></i>Secured connection
-        </p>
-    </div>
-
-    <!-- Footer -->
-    <p class="text-center text-xs text-slate-400 mt-8">Photo Gallery &mdash; NAS Photo Management System</p>
 </div>
 
 <!-- Password Change Modal -->
-<div id="pw-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);">
-    <div class="bg-white/80 backdrop-blur-2xl border border-white/40 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" style="animation: cardIn 0.4s var(--spring);">
-        <div class="px-6 py-6">
-            <div class="text-center mb-5">
-                <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 mx-auto mb-3">
-                    <i class="ri-lock-2-line text-xl"></i>
+<div id="pw-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);">
+    <div class="glass-panel rounded-3xl shadow-2xl w-full max-w-md overflow-hidden" style="animation: cardIn 0.4s var(--spring);">
+        <div class="px-8 py-8">
+            <div class="text-center mb-6">
+                <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-3">
+                    <i class="ri-lock-password-line text-2xl"></i>
                 </div>
-                <h3 class="font-semibold text-slate-800">Update Your Password</h3>
-                <p class="text-xs text-slate-500 mt-1">Password must be 6+ chars with letters, digits, and special characters</p>
+                <h3 class="text-xl font-bold text-slate-800 dark:text-white">修改初始密码</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">为了账户安全，首次登录必须修改默认密码。密码需包含至少 6 位字符、字母、数字与特殊字符组合。</p>
             </div>
+            
             <div id="pw-error" class="error-msg"></div>
-            <div class="mb-3">
-                <input id="pw-current" type="password" class="login-input" placeholder="Current password" required>
+            
+            <div class="space-y-4">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <i class="ri-key-line text-lg"></i>
+                    </span>
+                    <input id="pw-current" type="password" class="login-input pl-11" placeholder="当前密码 (Current Password)" required>
+                </div>
+                
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <i class="ri-lock-password-fill text-lg"></i>
+                    </span>
+                    <input id="pw-new" type="password" class="login-input pl-11" placeholder="新密码 (New Password)" required>
+                </div>
+                
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <i class="ri-shield-keyhole-fill text-lg"></i>
+                    </span>
+                    <input id="pw-confirm" type="password" class="login-input pl-11" placeholder="确认新密码 (Confirm New Password)" required>
+                </div>
+                
+                <button onclick="doChangePassword()" class="login-btn mt-2" id="pw-submit">确认修改</button>
             </div>
-            <div class="mb-3">
-                <input id="pw-new" type="password" class="login-input" placeholder="New password" required>
-            </div>
-            <div class="mb-4">
-                <input id="pw-confirm" type="password" class="login-input" placeholder="Confirm new password" required>
-            </div>
-            <button onclick="doChangePassword()" class="login-btn" id="pw-submit">Update Password</button>
-            <p class="text-xs text-slate-400 mt-3 leading-relaxed">
-                <i class="ri-information-line mr-1"></i>
-                Minimum 6 characters · At least one letter · One digit · One special character
+            
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-4 leading-relaxed flex items-start">
+                <i class="ri-information-line mr-1 text-sm flex-shrink-0 text-amber-500 dark:text-amber-400"></i>
+                <span>必须包含：字母、数字、特殊符号 (如 !@#$%^&* 等)，且长度不小于 6 位。</span>
             </p>
         </div>
     </div>
@@ -161,20 +364,20 @@ async function doLogin(e) {
     var pw = document.getElementById('login-pw').value;
     var btn = document.getElementById('login-submit');
     var err = document.getElementById('login-error');
-    btn.disabled = true; btn.textContent = 'Signing in...'; err.style.display = 'none';
+    btn.disabled = true; btn.textContent = '登录中 / Signing in...'; err.style.display = 'none';
     try {
         var r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:user, password:pw}) });
         var d = await r.json();
         if (d.ok && d.need_change) {
             _needChange = true;
             document.getElementById('pw-modal').classList.remove('hidden');
-            btn.disabled = false; btn.textContent = 'Login';
+            btn.disabled = false; btn.textContent = '登 录';
             return;
         }
         if (d.ok) { window.location.href = '/admin/'; return; }
-        err.textContent = d.error || 'Invalid credentials'; err.style.display = 'block';
-    } catch(e) { err.textContent = 'Network error'; err.style.display = 'block'; }
-    btn.disabled = false; btn.textContent = 'Login';
+        err.textContent = d.error || '用户名或密码无效'; err.style.display = 'block';
+    } catch(e) { err.textContent = '网络错误，请稍后再试'; err.style.display = 'block'; }
+    btn.disabled = false; btn.textContent = '登 录';
 }
 
 async function doChangePassword() {
@@ -184,12 +387,12 @@ async function doChangePassword() {
     var btn = document.getElementById('pw-submit');
     var err = document.getElementById('pw-error');
     err.style.display = 'none';
-    if (newPw !== confirm) { err.textContent = 'Passwords do not match'; err.style.display = 'block'; return; }
-    if (newPw.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.style.display = 'block'; return; }
-    if (!/[a-zA-Z]/.test(newPw)) { err.textContent = 'Password must contain at least one letter'; err.style.display = 'block'; return; }
-    if (!/\d/.test(newPw)) { err.textContent = 'Password must contain at least one digit'; err.style.display = 'block'; return; }
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPw)) { err.textContent = 'Password must contain at least one special character'; err.style.display = 'block'; return; }
-    btn.disabled = true; btn.textContent = 'Updating...';
+    if (newPw !== confirm) { err.textContent = '两次输入的新密码不一致'; err.style.display = 'block'; return; }
+    if (newPw.length < 6) { err.textContent = '新密码长度不能小于 6 位'; err.style.display = 'block'; return; }
+    if (!/[a-zA-Z]/.test(newPw)) { err.textContent = '新密码必须包含至少一个英文字母'; err.style.display = 'block'; return; }
+    if (!/\d/.test(newPw)) { err.textContent = '新密码必须包含至少一个数字'; err.style.display = 'block'; return; }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPw)) { err.textContent = '新密码必须包含至少一个特殊字符'; err.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = '正在修改...';
     try {
         var r = await fetch('/api/change-password', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({current_password:current, new_password:newPw}) });
         var d = await r.json();
@@ -198,9 +401,9 @@ async function doChangePassword() {
             window.location.href = '/admin/';
             return;
         }
-        err.textContent = d.error || 'Failed to update password'; err.style.display = 'block';
-    } catch(e) { err.textContent = 'Network error'; err.style.display = 'block'; }
-    btn.disabled = false; btn.textContent = 'Update Password';
+        err.textContent = d.error || '密码更新失败，请确认原密码输入是否正确'; err.style.display = 'block';
+    } catch(e) { err.textContent = '网络错误，请重试'; err.style.display = 'block'; }
+    btn.disabled = false; btn.textContent = '确认修改';
 }
 </script>
 </body>
