@@ -110,7 +110,7 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
             existing_paths = set(os.path.normpath(row['file_path']) for row in cursor.fetchall())
             existing_by_path = None
         else:
-            cursor.execute('SELECT id, file_path, file_size, created_at FROM image_analysis')
+            cursor.execute('SELECT id, file_path, file_size, created_at FROM image_analysis WHERE file_path LIKE ?', (root + '%',))
             existing_by_path = {}
             for row in cursor.fetchall():
                 existing_by_path[row['file_path']] = {

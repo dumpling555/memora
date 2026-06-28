@@ -300,6 +300,8 @@
         let isPaginationMode = true;
         const PAGE_SIZE = 100;
 
+        function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
         // ========== Query params helper ==========
         function buildParams() {
             const params = new URLSearchParams();
@@ -369,11 +371,11 @@
         function cardHtml(photo) {
             return `<div class="photo-card aspect-square rounded-xl bg-slate-200 group cursor-pointer" onclick="openModal(${photo.id})">
                 <div class="tag-overlay">
-                    ${photo.tags ? photo.tags.split(',').map(t => `<span class="tag-chip">${t.trim()}</span>`).join('') : ''}
+                    ${photo.tags ? photo.tags.split(',').map(t => `<span class="tag-chip">${esc(t.trim())}</span>`).join('') : ''}
                 </div>
                 <img src="/api/thumb/${photo.id}?t=${Date.parse(photo.created_at) || photo.id}" class="w-full h-full object-cover"
-                     onerror="this.src='https://via.placeholder.com/400x400?text=Image+Not+Found'"
-                     alt="${photo.file_name}" loading="lazy">
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27400%27 height=%27400%27 viewBox=%270 0 400 400%27%3E%3Crect fill=%27%23334155%27 width=%27400%27 height=%27400%27/%3E%3Ctext x=%27200%27 y=%27200%27 fill=%27%2394a3b8%27 font-size=%2716%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3EImage Not Found%3C/text%3E%3C/svg%3E'"
+                     alt="${esc(photo.file_name)}" loading="lazy">
             </div>`;
         }
 
@@ -581,9 +583,10 @@
         }
 
         document.getElementById('close-modal').addEventListener('click', closeModal);
+        let _searchTimer;
         document.getElementById('search-input').addEventListener('input', () => {
-            fetchTimeline();
-            fetchPhotos();
+            clearTimeout(_searchTimer);
+            _searchTimer = setTimeout(() => { fetchTimeline(); fetchPhotos(); }, 300);
         });
 
         // Close modal on click outside
@@ -601,7 +604,7 @@
         }
 
         async function logout() {
-            await fetch('/api/logout');
+            await fetch('/api/logout', {method:'POST'});
             window.location.href = '/';
         }
 
@@ -653,7 +656,6 @@
             const bc = new BroadcastChannel('gallery-admin');
             bc.addEventListener('message', (e) => {
                 if (e.data && e.data.type === 'folder-visibility-changed') {
-                    fetchPhotos();
                     fetchPhotos();
                 }
             });

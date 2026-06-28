@@ -7,7 +7,8 @@ import sys
 import hashlib
 import io
 import re
-from thumb_common import try_generate, thumb_filename, THUMB_DIR
+import secrets
+from thumb_common import try_generate, thumb_filename
 
 app = Flask(__name__)
 
@@ -38,6 +39,9 @@ try:
 except sqlite3.OperationalError:
     # Table doesn't exist yet on first startup; it will be created by _init_admin_db later
     app.secret_key = os.urandom(24).hex()
+
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 28800  # 8 hours
 
 
 # =============================================================================
@@ -216,6 +220,9 @@ def _init_scheduler(app_instance):
 # Authentication
 # =============================================================================
 
+# Login rate limiting (in-memory)
+_login_attempts = {}  # IP -> list of timestamps
+
 @app.before_request
 def require_auth():
     if request.path in ('/login', '/api/login', '/api/logout', '/api/change-password') or request.path.startswith('/static/'):
@@ -235,6 +242,22 @@ def require_auth():
             return jsonify({'error': 'Authentication required'}), 401
         return render_template('landing.html', need_setup=False)
 
+    # CSRF protection for state-changing requests
+    if request.method in ('POST', 'PUT', 'DELETE') and request.path not in ('/api/login', '/api/logout'):
+        csrf_token = request.headers.get('X-CSRF-Token', '')
+        if not csrf_token or csrf_token != session.get('csrf_token', ''):
+            return jsonify({'error': 'CSRF token missing or invalid'}), 403
+
+    # Force password change check
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT value FROM admin_settings WHERE key='must_change_password'")
+    mcp_row = c.fetchone()
+    conn.close()
+    if mcp_row and mcp_row[0] == '1':
+        if request.path not in ('/api/change-password', '/api/csrf-token', '/api/logout'):
+            return jsonify({'error': 'Password change required', 'need_change': True}), 403
+
 
 @app.route('/login')
 def login_page():
@@ -243,6 +266,20 @@ def login_page():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
+    # Rate limiting
+    ip = request.remote_addr or '127.0.0.1'
+    now = time.time()
+    window = 300  # 5 minutes
+    max_attempts = 5
+
+    # Clean up old entries and check rate limit
+    attempts = _login_attempts.get(ip, [])
+    attempts = [t for t in attempts if now - t < window]
+    _login_attempts[ip] = attempts
+
+    if len(attempts) >= max_attempts:
+        return jsonify({'error': 'Too many login attempts. Please try again later.'}), 429
+
     data = request.get_json()
     username = data.get('username', '')
     password = data.get('password', '')
@@ -259,10 +296,16 @@ def api_login():
 
     stored_user = user_row[0] if user_row else ''
     if not pw_row or not check_password_hash(pw_row[0], password) or username != stored_user:
+        # Record failed attempt
+        _login_attempts[ip].append(now)
         return jsonify({'ok': False, 'error': 'Invalid credentials'}), 401
+
+    # Clear rate limit on successful login
+    _login_attempts.pop(ip, None)
 
     session['logged_in'] = True
     session['username'] = username
+    session['csrf_token'] = secrets.token_hex(32)
     session.permanent = True
 
     need_change = change_row and change_row[0] == '1'
@@ -307,18 +350,25 @@ def api_change_password():
     return jsonify({'ok': True})
 
 
-@app.route('/api/logout')
+@app.route('/api/csrf-token')
+def api_csrf_token():
+    return jsonify({'token': session.get('csrf_token', '')})
+
+
+@app.route('/api/logout', methods=['POST'])
 def api_logout():
     session.pop('logged_in', None)
+    session.pop('csrf_token', None)
     return jsonify({'ok': True})
 
 
 def _build_thumb_map_wrapper():
     """Rebuild THUMB_MAP from disk, verifying hash matches current DB file_path."""
-    THUMB_MAP.clear()
+    new_map = {}
     start = time.perf_counter()
     count = 0
     skipped = 0
+    conn = None
     try:
         # Load all photo file paths from DB for hash verification
         db_paths = {}
@@ -328,9 +378,12 @@ def _build_thumb_map_wrapper():
             cursor.execute("SELECT id, file_path FROM image_analysis")
             for row in cursor.fetchall():
                 db_paths[str(row[0])] = row[1]
-            conn.close()
         except Exception:
             pass
+        finally:
+            if conn:
+                conn.close()
+                conn = None
 
         for fname in os.listdir(THUMB_DIR):
             if not fname.endswith('.jpg'):
@@ -339,7 +392,7 @@ def _build_thumb_map_wrapper():
             if len(parts) != 2:
                 continue
             pid, h = parts
-            h = h.rstrip('.jpg')
+            h = h[:-4]  # remove '.jpg' suffix
             # Verify hash matches current DB file_path
             db_path = db_paths.get(pid)
             if db_path:
@@ -347,10 +400,12 @@ def _build_thumb_map_wrapper():
                 if h != expected_hash:
                     skipped += 1
                     continue
-            THUMB_MAP[pid] = os.path.join(THUMB_DIR, fname)
+            new_map[pid] = os.path.join(THUMB_DIR, fname)
             count += 1
     except FileNotFoundError:
         pass
+    THUMB_MAP.clear()
+    THUMB_MAP.update(new_map)
     elapsed = time.perf_counter() - start
     print(f'Thumbnail map rebuilt: {count} entries valid, {skipped} skipped (hash mismatch) in {elapsed*1000:.0f}ms')
 
@@ -463,7 +518,11 @@ def get_photos():
         parts = after_cursor.split('|', 1)
         if len(parts) == 2:
             after_mtime = parts[0]
-            after_id = int(parts[1])
+            try:
+                after_id = int(parts[1])
+            except ValueError:
+                conn.close()
+                return jsonify({'error': 'Invalid cursor'}), 400
             sql += ' AND (created_at < ? OR (created_at = ? AND id < ?))'
             params.extend([after_mtime, after_mtime, after_id])
 

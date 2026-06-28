@@ -329,7 +329,8 @@ function showToast(message, type='success') {
     const icons = { success: 'ri-checkbox-circle-line', error: 'ri-error-warning-line', info: 'ri-information-line' };
     const el = document.createElement('div');
     el.className = `toast flex items-center gap-2 px-4 py-2.5 rounded-lg border ${colors[type] || colors.info} shadow-sm text-sm`;
-    el.innerHTML = `<i class="${icons[type] || icons.info}"></i> ${message}`;
+    el.innerHTML = `<i class="${icons[type] || icons.info}"></i> <span></span>`;
+    el.querySelector('span').textContent = message;
     container.appendChild(el);
     setTimeout(() => el.remove(), 3000);
 }
@@ -346,7 +347,7 @@ function switchLang(lang) {
 }
 
 async function logout() {
-    await fetch('/api/logout');
+    await fetch('/api/logout', {method: 'POST', headers: {'X-CSRF-Token': _csrfToken}});
     window.location.href = '/';
 }
 
@@ -383,9 +384,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 let sourcesData = [];
 let editingSourceId = null;
 
+let _csrfToken = '';
+async function fetchCsrfToken() {
+    try {
+        const r = await fetch('/api/csrf-token');
+        if (r.ok) { const d = await r.json(); _csrfToken = d.token || ''; }
+    } catch(e) {}
+}
+
 async function loadSources() {
     try {
         const r = await fetch('/admin/api/sources');
+        if (!r.ok) throw new Error('Failed to load sources');
         sourcesData = await r.json();
         const tbody = document.getElementById('sources-tbody');
         if (!sourcesData.length) {
@@ -399,7 +409,7 @@ async function loadSources() {
                 <td class="px-4 py-3 text-xs font-mono text-slate-500 max-w-[400px] truncate" title="${esc(s.root_path)}">${esc(s.root_path)}</td>
                 <td class="px-4 py-3">
                     <label class="inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="hidden source-toggle" data-id="${s.id}" ${s.is_active ? 'checked' : ''} onchange="toggleSourceStatus(${s.id}, this.checked)">
+                        <input type="checkbox" class="hidden source-toggle" data-id="${parseInt(s.id)}" ${s.is_active ? 'checked' : ''} onchange="toggleSourceStatus(${parseInt(s.id)}, this.checked)">
                         <span class="toggle-slider w-10 h-5 rounded-full relative transition-colors duration-200">
                             <span class="toggle-knob absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></span>
                         </span>
@@ -408,10 +418,10 @@ async function loadSources() {
                 <td class="px-4 py-3"><span class="connectivity-${s.id} text-xs text-slate-400"><i class="ri-loader-4-line animate-spin"></i> Checking...</span></td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-1.5">
-                        <button onclick="triggerScan(${s.id}, 'incremental')" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Quick scan"><i class="ri-play-circle-line"></i></button>
-                        <button onclick="triggerScan(${s.id}, 'full')" class="p-1.5 text-slate-400 hover:text-green-600 rounded hover:bg-green-50" title="Full scan"><i class="ri-refresh-line"></i></button>
-                        <button onclick="editSource(${s.id})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded hover:bg-amber-50" title="Edit"><i class="ri-pencil-line"></i></button>
-                        <button onclick="deleteSource(${s.id})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line"></i></button>
+                        <button onclick="triggerScan(${parseInt(s.id)}, 'incremental')" class="p-1.5 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Quick scan"><i class="ri-play-circle-line"></i></button>
+                        <button onclick="triggerScan(${parseInt(s.id)}, 'full')" class="p-1.5 text-slate-400 hover:text-green-600 rounded hover:bg-green-50" title="Full scan"><i class="ri-refresh-line"></i></button>
+                        <button onclick="editSource(${parseInt(s.id)})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded hover:bg-amber-50" title="Edit"><i class="ri-pencil-line"></i></button>
+                        <button onclick="deleteSource(${parseInt(s.id)})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line"></i></button>
                     </div>
                 </td>
             </tr>
@@ -420,7 +430,7 @@ async function loadSources() {
         sourcesData.forEach(s => checkConnectivity(s.id));
     } catch (e) {
         console.error(e);
-        document.getElementById('sources-tbody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ' + e.message + '</td></tr>';
+        document.getElementById('sources-tbody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ' + esc(e.message) + '</td></tr>';
     }
 }
 
@@ -465,7 +475,7 @@ async function testSourceConnectivity() {
             return;
         }
 
-        const resp = await fetch(`/admin/api/sources/${targetId}/test`, { method: 'POST' });
+        const resp = await fetch(`/admin/api/sources/${targetId}/test`, { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} });
         const data = await resp.json();
         if (data.ok) {
             resultEl.innerHTML = `<span class="text-green-600"><i class="ri-check-line"></i> ${esc(data.message)}</span>`;
@@ -473,7 +483,7 @@ async function testSourceConnectivity() {
             resultEl.innerHTML = `<span class="text-red-500"><i class="ri-close-line"></i> ${esc(data.message)}</span>`;
         }
     } catch (e) {
-        resultEl.innerHTML = `<span class="text-red-500">Error: ${e.message}</span>`;
+        resultEl.innerHTML = `<span class="text-red-500">Error: ${esc(e.message)}</span>`;
     }
 }
 
@@ -488,13 +498,13 @@ async function saveSource() {
         if (editingSourceId) {
             resp = await fetch(`/admin/api/sources/${editingSourceId}`, {
                 method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
                 body: JSON.stringify({name, root_path})
             });
         } else {
             resp = await fetch('/admin/api/sources', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
                 body: JSON.stringify({name, root_path, is_active: 1})
             });
         }
@@ -514,7 +524,7 @@ async function saveSource() {
 async function deleteSource(id) {
     showConfirmModal('Delete this media source?', 'This will also remove folder visibility settings and schedules for this source.', async () => {
         try {
-            const resp = await fetch(`/admin/api/sources/${id}`, { method: 'DELETE' });
+            const resp = await fetch(`/admin/api/sources/${id}`, { method: 'DELETE', headers: {'X-CSRF-Token': _csrfToken} });
             if (!resp.ok) { showToast('Failed to delete', 'error'); return; }
             showToast('Source deleted');
             loadSources();
@@ -525,7 +535,7 @@ async function deleteSource(id) {
 }
 async function checkConnectivity(id) {
     try {
-        const resp = await fetch(`/admin/api/sources/${id}/test`, { method: 'POST' });
+        const resp = await fetch(`/admin/api/sources/${id}/test`, { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} });
         const data = await resp.json();
         const el = document.querySelector(`.connectivity-${id}`);
         if (el) {
@@ -559,7 +569,7 @@ async function triggerScan(id, mode = 'incremental') {
     }
 
     try {
-        const resp = await fetch(`/admin/api/scan/${id}?mode=${mode}`, { method: 'POST' });
+        const resp = await fetch(`/admin/api/scan/${id}?mode=${mode}`, { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} });
         const data = await resp.json();
         if (resp.status === 409) {
             showToast('Scan already in progress', 'info');
@@ -587,7 +597,7 @@ async function toggleSourceStatus(id, active) {
     try {
         const resp = await fetch(`/admin/api/sources/${id}`, {
             method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
             body: JSON.stringify({is_active: active ? 1 : 0})
         });
         if (!resp.ok) {
@@ -613,6 +623,7 @@ async function loadFolderTree() {
     try {
         // Auto-detect first active source
         const srcResp = await fetch('/admin/api/sources');
+        if (!srcResp.ok) throw new Error('Failed to load sources');
         const allSources = await srcResp.json();
         const activeSources = allSources.filter(s => s.is_active);
         if (!activeSources.length) {
@@ -624,6 +635,7 @@ async function loadFolderTree() {
         let html = '';
         for (const source of activeSources) {
             const resp = await fetch(`/admin/api/folders/${source.id}`);
+            if (!resp.ok) throw new Error('Failed to load folders');
             const data = await resp.json();
 
             if (!data.tree || !data.tree.length) {
@@ -656,7 +668,7 @@ async function loadFolderTree() {
 
         container.innerHTML = html;
     } catch (e) {
-        container.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`;
+        container.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${esc(e.message)}</p>`;
     }
 }
 
@@ -711,7 +723,7 @@ async function toggleFolderVisibility(eyeBtn) {
         const paths = _fvData.paths[sourceId] || {};
         const resp = await fetch(`/admin/api/folders/${sourceId}/visibility`, {
             method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
             body: JSON.stringify({folder_path: path, is_hidden: newHidden})
         });
         if (!resp.ok) {
@@ -730,7 +742,8 @@ async function toggleFolderVisibility(eyeBtn) {
         // Update in-place — no re-render
         updateRowVisibility(row, newHidden);
         // Also update children rows
-        row.parentElement.querySelectorAll('.fv-row').forEach(childRow => {
+        const parentLi = row.closest('li');
+        parentLi.querySelectorAll(':scope > ul .fv-row').forEach(childRow => {
             updateRowVisibility(childRow, newHidden);
         });
         // Update stored data
@@ -772,8 +785,8 @@ async function loadSchedules() {
     try {
         // Fetch all data in parallel
         const [sources, schedules] = await Promise.all([
-            fetch('/admin/api/sources').then(r => r.json()),
-            fetch('/admin/api/schedules').then(r => r.json()),
+            fetch('/admin/api/sources').then(r => { if (!r.ok) throw new Error('Failed to load sources'); return r.json(); }),
+            fetch('/admin/api/schedules').then(r => { if (!r.ok) throw new Error('Failed to load schedules'); return r.json(); }),
         ]);
         schedulesData = schedules;
 
@@ -857,7 +870,7 @@ async function addSchedule(sourceId) {
     try {
         const resp = await fetch('/admin/api/schedules', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
             body: JSON.stringify({source_id: sourceId, interval_minutes: parseInt(interval), is_active: active})
         });
         if (!resp.ok) { showToast('Failed to create schedule', 'error'); return; }
@@ -872,7 +885,7 @@ async function saveSched(id) {
     try {
         const resp = await fetch(`/admin/api/schedules/${id}`, {
             method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
             body: JSON.stringify({interval_minutes: parseInt(interval), is_active: active})
         });
         if (!resp.ok) { showToast('Failed to update schedule', 'error'); return; }
@@ -905,8 +918,8 @@ function closeConfirmModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('confirm-btn').addEventListener('click', () => {
-        if (_confirmCallback) _confirmCallback();
+    document.getElementById('confirm-btn').addEventListener('click', async () => {
+        if (_confirmCallback) await _confirmCallback();
         closeConfirmModal();
     });
 });
@@ -914,7 +927,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function deleteSched(id) {
     showConfirmModal('Delete this schedule?', 'This action cannot be undone.', async () => {
         try {
-            await fetch(`/admin/api/schedules/${id}`, { method: 'DELETE' });
+            await fetch(`/admin/api/schedules/${id}`, { method: 'DELETE', headers: {'X-CSRF-Token': _csrfToken} });
             showToast('Schedule deleted');
             loadSchedules();
         } catch (e) { showToast('Error: ' + e.message, 'error'); }
@@ -926,7 +939,7 @@ async function toggleScheduler() {
     try {
         const resp = await fetch('/admin/api/scheduler/toggle', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
             body: JSON.stringify({enabled})
         });
         const data = await resp.json();
@@ -951,6 +964,7 @@ i18n.init();
 themeManager.init();
 updateLangIndicator(i18n.getLang());
 loadSources();
+fetchCsrfToken();
 </script>
 </body>
 </html>

@@ -108,7 +108,7 @@ def list_sources():
 
 @admin_bp.route('/api/sources', methods=['POST'])
 def create_source():
-    data = request.get_json(force=True)
+    data = request.get_json()
     name = (data.get('name') or '').strip()
     root_path = (data.get('root_path') or '').strip()
     is_active = data.get('is_active', 1)
@@ -149,7 +149,7 @@ def create_source():
 
 @admin_bp.route('/api/sources/<int:source_id>', methods=['PUT'])
 def update_source(source_id):
-    data = request.get_json(force=True)
+    data = request.get_json()
     if 'root_path' in data:
         path_val = (data['root_path'] or '').strip()
         if not path_val:
@@ -240,7 +240,8 @@ def test_source(source_id):
     except PermissionError:
         return jsonify({'ok': False, 'message': 'Permission denied accessing the path', 'stats': None})
     except OSError as e:
-        return jsonify({'ok': False, 'message': f'SMB / filesystem error: {e}', 'stats': None})
+        print(f'[admin] path error: {e}')
+        return jsonify({'ok': False, 'message': 'Filesystem access error', 'stats': None})
 
     msg = f'Path accessible: {folders} folders, {files} image files found (top level)'
     return jsonify({
@@ -283,7 +284,8 @@ def test_path_direct():
     except PermissionError:
         return jsonify({'ok': False, 'message': 'Permission denied'})
     except OSError as e:
-        return jsonify({'ok': False, 'message': f'SMB error: {e}'})
+        print(f'[admin] path error: {e}')
+        return jsonify({'ok': False, 'message': 'Path access error'})
 
     return jsonify({
         'ok': True,
@@ -368,7 +370,7 @@ def get_folder_tree(source_id):
 
 @admin_bp.route('/api/folders/<int:source_id>/visibility', methods=['PUT'])
 def toggle_folder_visibility(source_id):
-    data = request.get_json(force=True)
+    data = request.get_json()
     folder_path = (data.get('folder_path') or '').strip()
     is_hidden = data.get('is_hidden', True)
 
@@ -458,7 +460,9 @@ def _start_scan(source_id, mode='incremental'):
                 _scan_abort.pop(lid, None)
             try:
                 from thumb_daemon import ThumbnailDaemon
-                td = ThumbnailDaemon()
+                td = current_app.config.get('THUMB_DAEMON')
+                if td is None:
+                    td = ThumbnailDaemon()
                 td.run_once(src_id)
                 from app import _build_thumb_map_wrapper
                 _build_thumb_map_wrapper()
@@ -490,15 +494,15 @@ def trigger_scan(source_id):
     if mode not in ('incremental', 'full'):
         mode = 'incremental'
 
-    # Prevent duplicate scans for same source
+    # Prevent duplicate scans for same source (check and start atomically)
     with _scan_lock:
         if source_id in _active_scans:
             return jsonify({
                 'error': 'Scan already running for this source',
                 'scan_log_id': _active_scans[source_id]
             }), 409
+        log_id = _start_scan(source_id, mode)
 
-    log_id = _start_scan(source_id, mode)
     return jsonify({'scan_log_id': log_id, 'status': 'running', 'mode': mode}), 202
 
 
@@ -629,13 +633,21 @@ def list_schedules():
 
 @admin_bp.route('/api/schedules', methods=['POST'])
 def create_schedule():
-    data = request.get_json(force=True)
+    data = request.get_json()
     source_id = data.get('source_id')
     interval_minutes = data.get('interval_minutes', 30)
     is_active = data.get('is_active', 1)
 
     if not source_id:
         return jsonify({'error': 'source_id is required'}), 400
+
+    # Validate interval_minutes
+    try:
+        interval_minutes = int(interval_minutes)
+        if interval_minutes < 1 or interval_minutes > 10080:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({'error': 'interval_minutes must be a positive integer between 1 and 10080'}), 400
 
     conn = get_db()
     cursor = conn.cursor()
@@ -673,7 +685,16 @@ def create_schedule():
 
 @admin_bp.route('/api/schedules/<int:schedule_id>', methods=['PUT'])
 def update_schedule(schedule_id):
-    data = request.get_json(force=True)
+    data = request.get_json()
+
+    # Validate interval_minutes if provided
+    if 'interval_minutes' in data:
+        try:
+            iv = int(data['interval_minutes'])
+            if iv < 1 or iv > 10080:
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify({'error': 'interval_minutes must be a positive integer between 1 and 10080'}), 400
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (schedule_id,))
@@ -712,7 +733,7 @@ def delete_schedule(schedule_id):
 
 @admin_bp.route('/api/scheduler/toggle', methods=['POST'])
 def toggle_scheduler():
-    data = request.get_json(force=True)
+    data = request.get_json()
     enabled = data.get('enabled', False)
 
     conn = get_db()
