@@ -11,10 +11,6 @@ import threading
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(_BASE, '..', 'res.sqlite')
-# Add project root so analyze_images_sqlite can be imported
-_PROJECT_ROOT = os.path.normpath(os.path.join(_BASE, '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
 
 CYCLE_INTERVAL = 60
 MAX_RETRIES = 5
@@ -62,7 +58,7 @@ class AnalysisDaemon:
             self._signal.clear()
 
     def _process_pending(self):
-        from analyze_images_sqlite import (
+        from ai_helper import (
             prepare_image, image_to_b64, analyze_image_with_lmstudio,
             parse_claude_result, call_tag_lm, extract_tags,
         )
