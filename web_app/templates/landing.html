@@ -178,6 +178,7 @@ html.dark .dark-show { display: inline-block !important; }
 <!-- Background Agentic Orbs -->
 <div class="glow-orb bg-indigo-500 top-10 left-10"></div>
 <div class="glow-orb bg-purple-500 bottom-10 right-10"></div>
+<canvas id="particle-canvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
 
 <!-- Theme toggle floating -->
 <div class="fixed top-6 right-6 z-50">
@@ -405,6 +406,91 @@ async function doChangePassword() {
     } catch(e) { err.textContent = '网络错误，请重试'; err.style.display = 'block'; }
     btn.disabled = false; btn.textContent = '确认修改';
 }
+
+// Antigravity Floating Particles Background Effect
+(function() {
+    const canvas = document.getElementById('particle-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+    
+    window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    });
+    
+    class Particle {
+        constructor() {
+            this.reset();
+            this.y = Math.random() * height;
+        }
+        
+        reset() {
+            this.x = Math.random() * width;
+            this.y = height + Math.random() * 20;
+            this.size = Math.random() * 2.5 + 0.8;
+            this.speedY = -(Math.random() * 0.5 + 0.15); // upward "antigravity" drift
+            this.speedX = (Math.random() - 0.5) * 0.2;
+            this.opacity = Math.random() * 0.45 + 0.1;
+            
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                // Neon Cyan or Purple for AI Agentic dark theme
+                this.color = Math.random() > 0.5 ? '6, 182, 212' : '168, 85, 247';
+            } else {
+                // Soft Indigo/Blue for light theme
+                this.color = Math.random() > 0.5 ? '99, 102, 241' : '59, 130, 246';
+            }
+        }
+        
+        update() {
+            this.y += this.speedY;
+            this.x += this.speedX;
+            
+            if (this.y < -10) {
+                this.reset();
+            }
+            if (this.x < -10 || this.x > width + 10) {
+                this.speedX = -this.speedX;
+            }
+        }
+        
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${this.color}, ${this.opacity})`;
+            ctx.fill();
+        }
+    }
+    
+    const particleCount = Math.min(65, Math.floor((width * height) / 18000));
+    const particles = [];
+    for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+    }
+    
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+        requestAnimationFrame(animate);
+    }
+    animate();
+    
+    // Dynamically change particle colors when dark mode changes
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'class') {
+                particles.forEach(p => p.reset());
+            }
+        });
+    });
+    observer.observe(document.documentElement, { attributes: true });
+})();
 </script>
 </body>
 </html>
