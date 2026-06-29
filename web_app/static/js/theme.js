@@ -29,8 +29,10 @@ const themeManager = {
 
   init() {
     const saved = localStorage.getItem('kilo_theme');
-    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    if (saved === 'dark') {
       this._theme = 'dark';
+    } else {
+      this._theme = 'light';
     }
     this.apply();
   }

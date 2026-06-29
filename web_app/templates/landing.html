@@ -11,115 +11,162 @@
 <style>
 :root { 
     --spring: cubic-bezier(0.16, 1, 0.3, 1); 
-    --spring-slow: cubic-bezier(0.22, 1, 0.36, 1); 
     --neon-blue: #06b6d4;
     --neon-purple: #a855f7;
-    --neon-glow-rgb: 99, 102, 241;
 }
+* { box-sizing: border-box; }
+
+/* ── Default Light Mode Style ── */
 body { 
-    background: radial-gradient(circle at 10% 20%, #f8fafc 0%, #f1f5f9 40%, #e2e8f0 100%); 
+    background: radial-gradient(circle at 10% 20%, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%); 
     font-family: 'Outfit', 'Inter', system-ui, sans-serif; 
     margin: 0; 
     min-height: 100vh; 
     color: #1e293b;
     overflow-x: hidden;
+    transition: background 0.4s var(--spring), color 0.4s var(--spring);
 }
+
+/* ── Dark Mode Style ── */
 html.dark body { 
-    background: radial-gradient(circle at 10% 20%, #030712 0%, #0b0f19 50%, #020617 100%); 
-    color: #f1f5f9;
+    background: radial-gradient(circle at 10% 20%, #030712 0%, #080c16 50%, #020617 100%); 
+    color: #cbd5e1;
 }
 
-/* Glassmorphism base */
-.glass-panel { 
-    background: rgba(255, 255, 255, 0.7); 
-    backdrop-filter: blur(24px); 
-    -webkit-backdrop-filter: blur(24px); 
-    border: 1px solid rgba(255, 255, 255, 0.45); 
-    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.08);
-}
-html.dark .glass-panel { 
-    background: rgba(17, 24, 39, 0.65); 
-    border-color: rgba(51, 65, 85, 0.35); 
-    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.4);
-}
-
-/* AI Agentic Glow FX */
-.glow-orb {
-    position: absolute;
-    width: 350px;
-    height: 350px;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.12;
+/* ── Particle Canvas ── */
+#particle-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     z-index: 0;
+}
+
+/* ── Ambient glow blobs ── */
+.glow-blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(100px);
     pointer-events: none;
+    z-index: 0;
+    opacity: 0.25;
+    transition: opacity 0.4s var(--spring);
 }
-html.dark .glow-orb {
-    opacity: 0.22;
-}
-
-/* Features animations */
-@keyframes cardIn { 
-    from { opacity: 0; transform: scale(0.96) translateY(15px); } 
-    to { opacity: 1; transform: scale(1) translateY(0); } 
-}
-@keyframes glowBorder {
-    0%, 100% { border-color: rgba(168, 85, 247, 0.2); }
-    50% { border-color: rgba(6, 182, 212, 0.5); }
+html.dark .glow-blob {
+    opacity: 0.15;
 }
 
-.agent-feature-card {
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    border-radius: 1.25rem;
+/* ── Main layout ── */
+.page-wrapper {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
+
+/* ── Glass panels ── */
+.glass-card { 
+    background: rgba(255, 255, 255, 0.45); 
+    backdrop-filter: blur(32px) saturate(1.3); 
+    -webkit-backdrop-filter: blur(32px) saturate(1.3); 
+    border: 1px solid rgba(99, 102, 241, 0.15); 
+    border-radius: 1.5rem;
+    box-shadow: 0 30px 80px -20px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255,255,255,0.6);
+    transition: background 0.4s var(--spring), border-color 0.4s var(--spring), box-shadow 0.4s var(--spring);
+}
+html.dark .glass-card { 
+    background: rgba(15, 23, 42, 0.55); 
+    border-color: rgba(139, 92, 246, 0.15); 
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* ── Feature pill cards ── */
+.feature-pill {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(99, 102, 241, 0.12);
+    border-radius: 1rem;
+    padding: 1.25rem;
     transition: all 0.4s var(--spring);
+    position: relative;
+    overflow: hidden;
 }
-html.dark .agent-feature-card {
-    background: rgba(15, 23, 42, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+html.dark .feature-pill {
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(99, 102, 241, 0.08);
 }
-.agent-feature-card:hover {
-    transform: translateY(-5px) scale(1.01);
-    background: rgba(255, 255, 255, 0.7);
-    border-color: rgba(99, 102, 241, 0.35);
-    box-shadow: 0 15px 35px -10px rgba(99, 102, 241, 0.15);
+.feature-pill::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
+    opacity: 0;
+    transition: opacity 0.4s;
 }
-html.dark .agent-feature-card:hover {
+.feature-pill:hover {
+    transform: translateY(-3px);
+    border-color: rgba(139, 92, 246, 0.35);
+    box-shadow: 0 12px 40px -8px rgba(99, 102, 241, 0.12);
+    background: rgba(255, 255, 255, 0.85);
+}
+html.dark .feature-pill:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+    box-shadow: 0 12px 40px -8px rgba(139, 92, 246, 0.2);
     background: rgba(30, 41, 59, 0.5);
-    border-color: rgba(168, 85, 247, 0.35);
-    box-shadow: 0 15px 35px -10px rgba(168, 85, 247, 0.25);
+}
+.feature-pill:hover::before { opacity: 1; }
+
+/* ── Icon container ── */
+.icon-box {
+    width: 2.5rem; height: 2.5rem;
+    border-radius: 0.75rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
 }
 
-/* Input Fields */
+/* ── Innovation badges ── */
+.innovation-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* ── Login Input ── */
 .login-input { 
     width: 100%; 
     padding: 0.875rem 1.25rem; 
-    border: 1px solid rgba(0, 0, 0, 0.08); 
+    border: 1px solid rgba(71, 85, 105, 0.15); 
     border-radius: 0.875rem; 
     font-size: 0.95rem; 
     outline: none; 
     transition: all 0.3s var(--spring); 
-    background: rgba(255, 255, 255, 0.5); 
-    box-sizing: border-box; 
+    background: rgba(255, 255, 255, 0.6); 
     color: #0f172a; 
 }
-.login-input:focus { 
-    border-color: #6366f1; 
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); 
-    background: rgba(255, 255, 255, 0.95); 
-}
-html.dark .login-input { 
-    background: rgba(3, 7, 18, 0.45); 
-    border-color: rgba(71, 85, 105, 0.35); 
+html.dark .login-input {
+    background: rgba(3, 7, 18, 0.5); 
+    border-color: rgba(71, 85, 105, 0.3); 
     color: #f1f5f9; 
 }
-html.dark .login-input:focus { 
-    background: rgba(3, 7, 18, 0.8); 
-    border-color: #a855f7; 
-    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2); 
+.login-input:focus { 
+    border-color: #8b5cf6; 
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15); 
+    background: rgba(255, 255, 255, 0.95); 
 }
+html.dark .login-input:focus {
+    background: rgba(3, 7, 18, 0.8); 
+}
+.login-input::placeholder { color: #64748b; }
 
-/* Glowing Button */
+/* ── Login Button ── */
 .login-btn { 
     width: 100%; 
     padding: 0.875rem; 
@@ -127,33 +174,32 @@ html.dark .login-input:focus {
     border-radius: 0.875rem; 
     font-size: 0.975rem; 
     font-weight: 600; 
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); 
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #06b6d4 100%); 
     color: white; 
     cursor: pointer; 
     transition: all 0.3s var(--spring); 
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+    position: relative;
+    overflow: hidden;
 }
-html.dark .login-btn {
-    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); 
-    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.25);
+.login-btn::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+    transition: transform 0.6s;
+    transform: translateX(-100%);
 }
+.login-btn:hover::after { transform: translateX(100%); }
 .login-btn:hover { 
     transform: translateY(-2px); 
-    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); 
+    box-shadow: 0 8px 30px rgba(124, 58, 237, 0.45);
 }
-html.dark .login-btn:hover {
-    box-shadow: 0 8px 25px rgba(168, 85, 247, 0.45);
-}
-.login-btn:active { 
-    transform: scale(0.975) translateY(0); 
-}
-.login-btn:disabled { 
-    opacity: 0.6; 
-    cursor: not-allowed; 
-    transform: none !important; 
-    box-shadow: none !important;
-}
+.login-btn:active { transform: scale(0.975) translateY(0); }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
+/* ── Error message ── */
 .error-msg { 
     background: rgba(239, 68, 68, 0.08); 
     border: 1px solid rgba(239, 68, 68, 0.2); 
@@ -164,111 +210,168 @@ html.dark .login-btn:hover {
     display: none; 
     margin-bottom: 1rem; 
 }
-html.dark .error-msg { 
+html.dark .error-msg {
+    background: rgba(239, 68, 68, 0.12); 
+    border-color: rgba(239, 68, 68, 0.25); 
     color: #fca5a5; 
-    background: rgba(239, 68, 68, 0.15);
 }
 
-html.dark .dark-hide { display: none; }
+/* ── Animations ── */
+@keyframes cardIn { 
+    from { opacity: 0; transform: scale(0.96) translateY(15px); } 
+    to { opacity: 1; transform: scale(1) translateY(0); } 
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.12; }
+    50% { opacity: 0.22; }
+}
+.animate-in { animation: fadeInUp 0.6s var(--spring) both; }
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+.delay-5 { animation-delay: 0.5s; }
+.delay-6 { animation-delay: 0.6s; }
+
+.dark-hide { display: inline-block; }
+.dark-show { display: none !important; }
+html.dark .dark-hide { display: none !important; }
 html.dark .dark-show { display: inline-block !important; }
 </style>
 </head>
-<body class="relative min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+<body>
 
-<!-- Background Agentic Orbs -->
-<div class="glow-orb bg-indigo-500 top-10 left-10"></div>
-<div class="glow-orb bg-purple-500 bottom-10 right-10"></div>
-<canvas id="particle-canvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+<!-- Particle Canvas -->
+<canvas id="particle-canvas"></canvas>
 
-<!-- Theme toggle floating -->
+<!-- Ambient glow blobs -->
+<div class="glow-blob" style="width:500px;height:500px;background:rgba(99,102,241,0.15);top:-10%;left:-5%;animation:pulse-glow 8s ease-in-out infinite;"></div>
+<div class="glow-blob" style="width:400px;height:400px;background:rgba(139,92,246,0.12);bottom:-5%;right:-5%;animation:pulse-glow 10s ease-in-out infinite 2s;"></div>
+<div class="glow-blob" style="width:300px;height:300px;background:rgba(6,182,212,0.08);top:40%;left:50%;animation:pulse-glow 12s ease-in-out infinite 4s;"></div>
+
+<!-- Theme toggle -->
 <div class="fixed top-6 right-6 z-50">
-    <button onclick="themeManager.toggle()" class="w-11 h-11 rounded-2xl glass-panel flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-all cursor-pointer">
+    <button onclick="themeManager.toggle()" class="w-11 h-11 rounded-2xl glass-card flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer">
         <i class="ri-sun-line text-xl dark-hide"></i>
         <i class="ri-moon-line text-xl dark-show hidden"></i>
     </button>
 </div>
 
-<div class="w-full max-w-6xl z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch my-auto">
+<div class="page-wrapper">
+<div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
     
-    <!-- Left Column: Branding, Utility, Features, AI Agentic Showcase -->
-    <div class="lg:col-span-7 flex flex-col justify-center space-y-8 pr-0 lg:pr-6">
+    <!-- ═══════ Left Column: Product Showcase ═══════ -->
+    <div class="lg:col-span-7 flex flex-col justify-center space-y-7 pr-0 lg:pr-4">
         
-        <!-- Logo and Brand -->
-        <div class="flex items-center space-x-4 animate-fade-in">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 dark:from-purple-500 dark:to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <i class="ri-cpu-line text-white text-3xl"></i>
+        <!-- Brand -->
+        <div class="flex items-center space-x-4 animate-in">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/25 relative">
+                <i class="ri-brain-line text-white text-2xl"></i>
+                <div class="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-slate-200 dark:border-slate-900 animate-pulse"></div>
             </div>
             <div>
                 <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Memora</h1>
-                <p class="text-sm font-semibold text-indigo-600 dark:text-cyan-400">AI Agentic Photo Archive System</p>
+                <p class="text-sm font-semibold bg-gradient-to-r from-violet-500 to-cyan-500 dark:from-violet-400 dark:to-cyan-400 bg-clip-text text-transparent">Your Private AI Photo Intelligence</p>
             </div>
         </div>
 
-        <!-- Description -->
-        <div class="space-y-4">
-            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800 dark:text-slate-100 leading-tight">
-                智能相册，意境由心
+        <!-- Tagline -->
+        <div class="space-y-3 animate-in delay-1">
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800 dark:text-white leading-tight">
+                用自然语言，<br>重新发现你的每一张照片
             </h2>
-            <p class="text-base sm:text-lg text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
-                Memora 是一款私有化、轻量级的个人 NAS 智能图库系统。结合本地深度学习算法，让您的照片归档与场景检索步入“主动感知”的 Agent 时代。
+            <p class="text-base text-slate-600 dark:text-slate-400 leading-relaxed max-w-xl">
+                Memora 是一个完全运行在本地的 AI 照片引擎。它不只是相册——它能理解画面内容、提取文字、感知氛围，让你用一句话就能找到任何一张照片。没有云端，没有订阅，你的记忆只属于你。
             </p>
         </div>
 
-        <!-- Features Showcase Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- Feature 1: Semantic Search -->
-            <div class="agent-feature-card p-5 flex space-x-4">
-                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                    <i class="ri-compass-3-line text-2xl"></i>
+        <!-- Innovation Tags -->
+        <div class="flex flex-wrap gap-2 animate-in delay-2">
+            <span class="innovation-tag bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300 border border-violet-500/20">
+                <i class="ri-lightbulb-flash-line"></i> Edge AI
+            </span>
+            <span class="innovation-tag bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300 border border-cyan-500/20">
+                <i class="ri-git-branch-line"></i> Open Source
+            </span>
+            <span class="innovation-tag bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-500/20">
+                <i class="ri-wifi-off-line"></i> Zero Cloud
+            </span>
+            <span class="innovation-tag bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/20">
+                <i class="ri-database-2-line"></i> SQLite Native
+            </span>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <!-- Feature 1 -->
+            <div class="feature-pill flex space-x-3 animate-in delay-2">
+                <div class="icon-box bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
+                    <i class="ri-search-eye-line text-xl"></i>
                 </div>
                 <div class="space-y-1">
-                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">语义化搜索 (Semantic)</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">支持“温暖的氛围”、“科技感”、“开心”等意境模糊匹配。精确文字优先，氛围意境融合。</p>
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">意境语义搜索</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">输入"下雨天的街道"或"温暖的笑容"，AI 通过 768 维向量空间理解语义意境，精准召回匹配画面。关键词与语义双轨融合排序。</p>
                 </div>
             </div>
 
-            <!-- Feature 2: 100% Privacy -->
-            <div class="agent-feature-card p-5 flex space-x-4">
-                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                    <i class="ri-shield-keyhole-line text-2xl"></i>
+            <!-- Feature 2 -->
+            <div class="feature-pill flex space-x-3 animate-in delay-3">
+                <div class="icon-box bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400">
+                    <i class="ri-eye-line text-xl"></i>
                 </div>
                 <div class="space-y-1">
-                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">完全离线隐私 (100% Offline)</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">本地 768 维特征模型部署，VLM 视觉描述与 OCR 运行于本地局域网，数据绝不上云。</p>
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">本地视觉大模型</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">接入本地 VLM 视觉模型，自动为每张照片生成画面描述、智能标签与 OCR 文字提取，无需手动标注，全程离线完成。</p>
                 </div>
             </div>
 
-            <!-- Feature 3: Scan Engine -->
-            <div class="agent-feature-card p-5 flex space-x-4">
-                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-cyan-100 dark:bg-cyan-950/50 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
-                    <i class="ri-archive-line text-2xl"></i>
+            <!-- Feature 3 -->
+            <div class="feature-pill flex space-x-3 animate-in delay-4">
+                <div class="icon-box bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+                    <i class="ri-shield-check-line text-xl"></i>
                 </div>
                 <div class="space-y-1">
-                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">并发扫描守护 (SMB Parallel)</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">线程池并发挂载扫描，支持增量/全量同步。独立守护线程处理重负载，操作零延迟。</p>
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">零云端隐私架构</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">所有 AI 推理、向量计算、图片处理均在本机完成。数据不经过任何第三方服务器，是个人与家庭隐私保护的终极方案。</p>
                 </div>
             </div>
 
-            <!-- Feature 4: Raw & HEIC supports -->
-            <div class="agent-feature-card p-5 flex space-x-4">
-                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                    <i class="ri-sparkling-line text-2xl"></i>
+            <!-- Feature 4 -->
+            <div class="feature-pill flex space-x-3 animate-in delay-5">
+                <div class="icon-box bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                    <i class="ri-speed-line text-xl"></i>
                 </div>
                 <div class="space-y-1">
-                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">全格式兼容与无感渲染</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">内置转换引擎，无缝兼容苹果 HEIC/HEIF 照片与专业相机 ARW(RAW) 格式渲染浏览。</p>
+                    <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">异步守护 · 前台极速</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">AI 分析、缩略图生成、NAS 扫描由后台多线程守护进程消化，前端浏览始终保持 &lt;50ms 响应。支持 HEIC / RAW 无损预览。</p>
                 </div>
             </div>
+
+        </div>
+
+        <!-- Stats bar -->
+        <div class="flex items-center gap-6 text-xs text-slate-500 dark:text-slate-400 animate-in delay-6">
+            <span class="flex items-center gap-1.5"><i class="ri-image-line text-violet-500"></i> 支持 10 万+ 照片</span>
+            <span class="flex items-center gap-1.5"><i class="ri-timer-flash-line text-cyan-500"></i> 语义检索 &lt;50ms</span>
+            <span class="flex items-center gap-1.5"><i class="ri-hard-drive-3-line text-emerald-500"></i> NAS / SMB 直连</span>
         </div>
 
     </div>
 
-    <!-- Right Column: Login Form glass card -->
+    <!-- ═══════ Right Column: Login Card ═══════ -->
     <div class="lg:col-span-5 flex flex-col justify-center">
-        <div class="glass-panel p-8 sm:p-10 rounded-3xl w-full max-w-md mx-auto relative overflow-hidden" style="animation: cardIn 0.5s var(--spring);">
+        <div class="glass-card p-8 sm:p-10 w-full max-w-md mx-auto relative overflow-hidden" style="animation: cardIn 0.5s var(--spring);">
+            
+            <!-- Subtle top accent line -->
+            <div class="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent"></div>
             
             <div class="text-center mb-8 relative z-10">
-                <h2 class="text-2xl font-bold tracking-tight text-slate-800 dark:text-white">系统登录 / Sign In</h2>
+                <h2 class="text-2xl font-bold tracking-tight text-slate-850 dark:text-white">系统登录</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">使用管理员凭证登录并管理图库</p>
             </div>
 
@@ -292,30 +395,31 @@ html.dark .dark-show { display: inline-block !important; }
                 <button type="submit" class="login-btn mt-2" id="login-submit">登 录</button>
             </form>
 
-            <div class="flex items-center justify-center space-x-2 mt-6 text-xs text-slate-400 dark:text-slate-500">
-                <i class="ri-shield-check-line text-base text-indigo-500 dark:text-purple-400"></i>
-                <span>安全会话校验 · 密钥端点保护</span>
+            <div class="flex items-center justify-center space-x-2 mt-6 text-xs text-slate-500 dark:text-slate-400">
+                <i class="ri-fingerprint-line text-base text-violet-500 dark:text-violet-400"></i>
+                <span>端到端加密会话 · 本地安全验证</span>
             </div>
 
         </div>
         
-        <!-- Bottom info -->
-        <p class="text-center text-xs text-slate-400 dark:text-slate-600 mt-6 font-medium">
-            Memora Photo Archive &mdash; Local Edge AI Engine
+        <!-- Bottom branding -->
+        <p class="text-center text-xs text-slate-500 dark:text-slate-600 mt-6 font-medium animate-in delay-6">
+            Memora v1.0 &mdash; Private Edge AI Photo Engine
         </p>
     </div>
 
 </div>
+</div>
 
 <!-- Password Change Modal -->
-<div id="pw-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);">
-    <div class="glass-panel rounded-3xl shadow-2xl w-full max-w-md overflow-hidden" style="animation: cardIn 0.4s var(--spring);">
+<div id="pw-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.4); backdrop-filter: blur(12px);">
+    <div class="glass-card shadow-2xl w-full max-w-md overflow-hidden" style="animation: cardIn 0.4s var(--spring);">
         <div class="px-8 py-8">
             <div class="text-center mb-6">
-                <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-3">
+                <div class="w-14 h-14 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto mb-3">
                     <i class="ri-lock-password-line text-2xl"></i>
                 </div>
-                <h3 class="text-xl font-bold text-slate-800 dark:text-white">修改初始密码</h3>
+                <h3 class="text-xl font-bold text-slate-900 dark:text-white">修改初始密码</h3>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">为了账户安全，首次登录必须修改默认密码。密码需包含至少 6 位字符、字母、数字与特殊字符组合。</p>
             </div>
             
@@ -346,7 +450,7 @@ html.dark .dark-show { display: inline-block !important; }
                 <button onclick="doChangePassword()" class="login-btn mt-2" id="pw-submit">确认修改</button>
             </div>
             
-            <p class="text-xs text-slate-400 dark:text-slate-500 mt-4 leading-relaxed flex items-start">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-4 leading-relaxed flex items-start">
                 <i class="ri-information-line mr-1 text-sm flex-shrink-0 text-amber-500 dark:text-amber-400"></i>
                 <span>必须包含：字母、数字、特殊符号 (如 !@#$%^&* 等)，且长度不小于 6 位。</span>
             </p>
@@ -354,6 +458,7 @@ html.dark .dark-show { display: inline-block !important; }
     </div>
 </div>
 
+<!-- ═══════ Application Logic ═══════ -->
 <script>
 i18n.init();
 themeManager.init();
@@ -406,90 +511,248 @@ async function doChangePassword() {
     } catch(e) { err.textContent = '网络错误，请重试'; err.style.display = 'block'; }
     btn.disabled = false; btn.textContent = '确认修改';
 }
+</script>
 
-// Antigravity Floating Particles Background Effect
+<!-- ═══════ Antigravity Wave Particle System ═══════ -->
+<script>
 (function() {
     const canvas = document.getElementById('particle-canvas');
-    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
-    
-    window.addEventListener('resize', () => {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
+    let W, H;
+    let mouseX = -9999, mouseY = -9999;
+    let mouseActive = false;
+    let time = 0;
+
+    // ── Configuration ──
+    const CFG = {
+        particleCount: 280,        // Significantly increased for billowing waves
+        connectionDist: 130,       // Max distance to draw links
+        mouseRadius: 190,          // Radius of mouse repulsion
+        mouseRepulsion: 0.12,      // Strength of cursor push
+        friction: 0.95,            // Inertial damping
+        baseSpeed: 0.25,           // Float drift base speed
+        returnForce: 0.003,        // Restoring force to local neighborhood
+        minRadius: 0.8,
+        maxRadius: 3.2,
+        layers: 3,                 // Parallax depth
+    };
+
+    const particles = [];
+
+    // ── Resize ──
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ── Mouse tracking ──
+    window.addEventListener('mousemove', function(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        mouseActive = true;
     });
-    
+    window.addEventListener('mouseleave', function() { mouseActive = false; });
+    window.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 0) {
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+            mouseActive = true;
+        }
+    }, { passive: true });
+    window.addEventListener('touchend', function() { mouseActive = false; });
+
+    // ── HSL Color Palette ──
+    const hues = [235, 260, 280, 190, 215]; // Blue, purple, indigo, cyan, light blue
+
+    function isDark() {
+        return document.documentElement.classList.contains('dark');
+    }
+
+    // ── Particle Class ──
     class Particle {
         constructor() {
-            this.reset();
-            this.y = Math.random() * height;
-        }
-        
-        reset() {
-            this.x = Math.random() * width;
-            this.y = height + Math.random() * 20;
-            this.size = Math.random() * 2.5 + 0.8;
-            this.speedY = -(Math.random() * 0.5 + 0.15); // upward "antigravity" drift
-            this.speedX = (Math.random() - 0.5) * 0.2;
-            this.opacity = Math.random() * 0.45 + 0.1;
+            this.layer = Math.floor(Math.random() * CFG.layers);
+            const depthScale = 0.4 + (this.layer / (CFG.layers - 1)) * 0.6;
             
-            const isDark = document.documentElement.classList.contains('dark');
-            if (isDark) {
-                // Neon Cyan or Purple for AI Agentic dark theme
-                this.color = Math.random() > 0.5 ? '6, 182, 212' : '168, 85, 247';
-            } else {
-                // Soft Indigo/Blue for light theme
-                this.color = Math.random() > 0.5 ? '99, 102, 241' : '59, 130, 246';
-            }
+            this.x = Math.random() * W;
+            this.y = Math.random() * H;
+            this.originX = this.x;
+            this.originY = this.y;
+            this.vx = (Math.random() - 0.5) * CFG.baseSpeed * depthScale;
+            this.vy = -(0.1 + Math.random() * 0.3) * depthScale; // Upward drift bias
+            this.radius = (CFG.minRadius + Math.random() * (CFG.maxRadius - CFG.minRadius)) * depthScale;
+            
+            this.hue = hues[Math.floor(Math.random() * hues.length)];
+            this.baseAlpha = (0.12 + Math.random() * 0.28) * depthScale;
+            this.saturation = 70 + Math.random() * 25;
+            this.lightness = 55 + Math.random() * 20;
+            
+            // Individual wave offsets
+            this.waveSpeed = 0.01 + Math.random() * 0.02;
+            this.waveAmpX = 15 + Math.random() * 25;
+            this.waveAmpY = 8 + Math.random() * 15;
+            this.pulsePhase = Math.random() * Math.PI * 2;
         }
-        
+
         update() {
-            this.y += this.speedY;
-            this.x += this.speedX;
-            
-            if (this.y < -10) {
-                this.reset();
+            this.pulsePhase += 0.01;
+
+            // Compute dynamic fluid wave flow (波涛效果)
+            const waveX = Math.sin(this.y * 0.005 + time * 0.025) * this.waveAmpX;
+            const waveY = Math.cos(this.x * 0.004 + time * 0.02) * this.waveAmpY;
+
+            // Target coordinates under current wave pattern
+            const targetX = this.x + waveX;
+            const targetY = this.y + waveY;
+
+            // Mouse interaction (repel relative to current visual wave positions)
+            if (mouseActive) {
+                const dx = targetX - mouseX;
+                const dy = targetY - mouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const repelDist = CFG.mouseRadius * (0.6 + this.layer * 0.4);
+                
+                if (dist < repelDist && dist > 0) {
+                    const force = (1 - dist / repelDist) * CFG.mouseRepulsion * (1 + this.layer * 0.5);
+                    this.vx += (dx / dist) * force;
+                    this.vy += (dy / dist) * force;
+                }
             }
-            if (this.x < -10 || this.x > width + 10) {
-                this.speedX = -this.speedX;
-            }
+
+            // Restore toward local home neighborhood
+            const dox = this.originX - this.x;
+            const doy = this.originY - this.y;
+            this.vx += dox * CFG.returnForce;
+            this.vy += doy * CFG.returnForce;
+
+            // Friction and position update
+            this.vx *= CFG.friction;
+            this.vy *= CFG.friction;
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Wrap when drifting completely out of bounds
+            if (this.x < -100) { this.x = W + 100; this.originX = this.x; }
+            if (this.x > W + 100) { this.x = -100; this.originX = this.x; }
+            if (this.y < -100) { this.y = H + 100; this.originY = this.y; }
+            if (this.y > H + 100) { this.y = -100; this.originY = this.y; }
+
+            // Store current calculated layout draw position
+            this.drawX = targetX;
+            this.drawY = targetY;
         }
-        
+
         draw() {
+            const dark = isDark();
+            // In light mode, reduce opacity for cleaner UI representation
+            const alphaMod = dark ? 1.0 : 0.65;
+            const pulse = 1 + Math.sin(this.pulsePhase) * 0.2;
+            const alpha = this.baseAlpha * pulse * alphaMod;
+            const r = this.radius * (0.95 + Math.sin(this.pulsePhase) * 0.05);
+
+            // Double glow outer aura for foreground layers in dark mode
+            if (dark && this.layer >= CFG.layers - 1 && r > 2.2) {
+                ctx.beginPath();
+                ctx.arc(this.drawX, this.drawY, r * 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha * 0.12})`;
+                ctx.fill();
+            }
+
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${this.color}, ${this.opacity})`;
+            ctx.arc(this.drawX, this.drawY, r, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha})`;
             ctx.fill();
         }
     }
-    
-    const particleCount = Math.min(65, Math.floor((width * height) / 18000));
-    const particles = [];
-    for (let i = 0; i < particleCount; i++) {
+
+    // ── Generate Particles ──
+    for (let i = 0; i < CFG.particleCount; i++) {
         particles.push(new Particle());
     }
-    
+
+    // ── Constellation Link Drawing ──
+    function drawConnections() {
+        const dark = isDark();
+        const baseAlphaMod = dark ? 0.14 : 0.09;
+        
+        for (let i = 0; i < particles.length; i++) {
+            const pi = particles[i];
+            for (let j = i + 1; j < particles.length; j++) {
+                const pj = particles[j];
+                
+                // Parallax layers constrain connection logic
+                if (Math.abs(pi.layer - pj.layer) > 1) continue;
+
+                const dx = pi.drawX - pj.drawX;
+                const dy = pi.drawY - pj.drawY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = CFG.connectionDist * (0.6 + Math.min(pi.layer, pj.layer) * 0.3);
+
+                if (dist < maxDist) {
+                    const alpha = (1 - dist / maxDist) * baseAlphaMod;
+                    const avgHue = (pi.hue + pj.hue) / 2;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(pi.drawX, pi.drawY);
+                    ctx.lineTo(pj.drawX, pj.drawY);
+                    
+                    if (dark) {
+                        ctx.strokeStyle = `hsla(${avgHue}, 70%, 70%, ${alpha})`;
+                    } else {
+                        ctx.strokeStyle = `hsla(${avgHue}, 60%, 55%, ${alpha})`;
+                    }
+                    ctx.lineWidth = 0.5 + (Math.min(pi.layer, pj.layer) * 0.25);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Pointer-to-network web threads
+        if (mouseActive) {
+            const mouseAlphaMod = dark ? 0.08 : 0.05;
+            for (const p of particles) {
+                const dx = p.drawX - mouseX;
+                const dy = p.drawY - mouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const reach = CFG.mouseRadius * 0.75;
+                if (dist < reach && p.layer >= 1) {
+                    const alpha = (1 - dist / reach) * mouseAlphaMod;
+                    ctx.beginPath();
+                    ctx.moveTo(mouseX, mouseY);
+                    ctx.lineTo(p.drawX, p.drawY);
+                    ctx.strokeStyle = dark
+                        ? `hsla(${p.hue}, 80%, 75%, ${alpha})`
+                        : `hsla(${p.hue}, 70%, 50%, ${alpha})`;
+                    ctx.lineWidth = 0.45;
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+
+    // ── Loop ──
     function animate() {
-        ctx.clearRect(0, 0, width, height);
-        particles.forEach(p => {
+        time += 1;
+        ctx.clearRect(0, 0, W, H);
+
+        // Update positions
+        for (const p of particles) {
             p.update();
+        }
+
+        // Render connections
+        drawConnections();
+
+        // Render particle dots
+        for (const p of particles) {
             p.draw();
-        });
+        }
+
         requestAnimationFrame(animate);
     }
     animate();
-    
-    // Dynamically change particle colors when dark mode changes
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.attributeName === 'class') {
-                particles.forEach(p => p.reset());
-            }
-        });
-    });
-    observer.observe(document.documentElement, { attributes: true });
 })();
 </script>
 </body>
