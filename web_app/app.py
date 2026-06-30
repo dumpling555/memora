@@ -182,7 +182,7 @@ def _init_scheduler(app_instance):
     analysis_d.start()
     app_instance.config['ANALYSIS_DAEMON'] = analysis_d
 
-    def _trigger_scan_fn(source_id, mode='incremental'):
+    def _trigger_scan_fn(source_id, mode='incremental', abort_event=None):
         conn2 = sqlite3.connect(DATABASE)
         cur2 = conn2.cursor()
         cur2.execute("INSERT INTO scan_log (media_source_id, status, started_at) VALUES (?, 'running', ?)",
@@ -192,21 +192,25 @@ def _init_scheduler(app_instance):
         conn2.close()
         import threading
 
+        if abort_event is None:
+            abort_event = threading.Event()
+
         def _scan_and_thumb():
             try:
-                scanner_run_scan(source_id, log_id, mode=mode)
+                scanner_run_scan(source_id, log_id, mode=mode, abort_event=abort_event)
             finally:
-                thumb_d.run_once(source_id)
-                analysis_d.run_once()
-                try:
-                    _build_thumb_map_wrapper()
-                except Exception:
-                    pass
+                if not abort_event.is_set():
+                    thumb_d.run_once(source_id)
+                    analysis_d.run_once()
+                    try:
+                        _build_thumb_map_wrapper()
+                    except Exception:
+                        pass
 
         thread = threading.Thread(target=_scan_and_thumb, args=(),
                                   daemon=True, name=f'sched-scan-{source_id}')
         thread.start()
-        return log_id
+        return log_id, thread
 
     scheduler.trigger_scan_fn = _trigger_scan_fn
     app_instance.config['SCAN_SCHEDULER'] = scheduler
@@ -887,4 +891,4 @@ def folder_visibility_version():
     return jsonify({'version': version})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=False, port=5000)
+    app.run(host='127.0.0.1', debug=False, port=5000)

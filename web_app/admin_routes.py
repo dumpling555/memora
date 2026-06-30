@@ -16,6 +16,12 @@ THUMB_DIR = os.path.join(_BASE, 'cache', 'thumbnails')
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
+def _calc_next_run(interval_minutes):
+    """Calculate next_run_at timestamp string from now + interval_minutes."""
+    return time.strftime('%Y-%m-%d %H:%M:%S',
+                         time.localtime(time.time() + int(interval_minutes) * 60))
+
+
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
@@ -657,29 +663,59 @@ def create_schedule():
         return jsonify({'error': 'Source not found'}), 404
 
     # Check if schedule already exists for this source
-    cursor.execute('SELECT id FROM scan_schedules WHERE media_source_id = ?', (source_id,))
+    cursor.execute('SELECT id, media_source_id FROM scan_schedules WHERE media_source_id = ?', (source_id,))
     existing = cursor.fetchone()
     if existing:
-        # Update instead
-        cursor.execute("""
-            UPDATE scan_schedules SET interval_minutes = ?, is_active = ?, updated_at = datetime('now')
-            WHERE id = ?
-        """, (interval_minutes, is_active, existing['id']))
+        # Update instead — check if scan is running before modifying interval
+        from flask import current_app
+        scheduler = current_app.config.get('SCAN_SCHEDULER')
+        if scheduler and scheduler.is_source_running(source_id):
+            if 'interval_minutes' in data:
+                conn.close()
+                return jsonify({'error': '扫描进行中，无法修改间隔'}), 409
+
+        next_run_at = None
+        if 'interval_minutes' in data or 'is_active' in data:
+            next_run_at = _calc_next_run(interval_minutes)
+        if next_run_at:
+            cursor.execute("""
+                UPDATE scan_schedules SET interval_minutes = ?, is_active = ?,
+                       next_run_at = ?, updated_at = datetime('now')
+                WHERE id = ?
+            """, (interval_minutes, is_active, next_run_at, existing['id']))
+        else:
+            cursor.execute("""
+                UPDATE scan_schedules SET interval_minutes = ?, is_active = ?, updated_at = datetime('now')
+                WHERE id = ?
+            """, (interval_minutes, is_active, existing['id']))
         conn.commit()
         cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (existing['id'],))
         row = cursor.fetchone()
         conn.close()
+        if scheduler:
+            scheduler.reload()
         return jsonify(dict(row))
 
+    # New schedule — set next_run_at
+    next_run_at = _calc_next_run(interval_minutes) if is_active else None
     cursor.execute("""
-        INSERT INTO scan_schedules (media_source_id, interval_minutes, is_active)
-        VALUES (?, ?, ?)
-    """, (source_id, interval_minutes, is_active))
+        INSERT INTO scan_schedules (media_source_id, interval_minutes, is_active, next_run_at)
+        VALUES (?, ?, ?, ?)
+    """, (source_id, interval_minutes, is_active, next_run_at))
     conn.commit()
     new_id = cursor.lastrowid
     cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (new_id,))
     row = cursor.fetchone()
     conn.close()
+
+    try:
+        from flask import current_app
+        scheduler = current_app.config.get('SCAN_SCHEDULER')
+        if scheduler:
+            scheduler.reload()
+    except Exception:
+        pass
+
     return jsonify(dict(row)), 201
 
 
@@ -695,25 +731,53 @@ def update_schedule(schedule_id):
                 raise ValueError
         except (ValueError, TypeError):
             return jsonify({'error': 'interval_minutes must be a positive integer between 1 and 10080'}), 400
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (schedule_id,))
-    if not cursor.fetchone():
+    sched = cursor.fetchone()
+    if not sched:
         conn.close()
         abort(404)
 
+    from flask import current_app
+    scheduler = current_app.config.get('SCAN_SCHEDULER')
+    source_id = sched['media_source_id']
+
+    # If interval_minutes is being changed, check if scan is running
+    if 'interval_minutes' in data and scheduler and scheduler.is_source_running(source_id):
+        conn.close()
+        return jsonify({'error': '扫描进行中，无法修改间隔'}), 409
+
+    # If deactivating, stop the running scan
+    if data.get('is_active') == 0 and sched['is_active'] == 1:
+        if scheduler:
+            scheduler.stop_source(source_id)
+
     updates = ["updated_at = datetime('now')"]
     params = []
+    new_interval = data.get('interval_minutes', sched['interval_minutes'])
     for field in ('interval_minutes', 'is_active'):
         if field in data:
             updates.append(f'{field} = ?')
             params.append(data[field])
+
+    # Recalculate next_run_at if interval changed or schedule reactivated
+    if 'interval_minutes' in data or (data.get('is_active') == 1 and sched['is_active'] == 0):
+        next_run_at = _calc_next_run(int(new_interval))
+        updates.append('next_run_at = ?')
+        params.append(next_run_at)
+
     params.append(schedule_id)
     cursor.execute(f"UPDATE scan_schedules SET {', '.join(updates)} WHERE id = ?", params)
     conn.commit()
     cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (schedule_id,))
     row = cursor.fetchone()
     conn.close()
+
+    if scheduler:
+        scheduler.reload()
+
     return jsonify(dict(row))
 
 
@@ -721,13 +785,25 @@ def update_schedule(schedule_id):
 def delete_schedule(schedule_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM scan_schedules WHERE id = ?', (schedule_id,))
-    if not cursor.fetchone():
+    cursor.execute('SELECT * FROM scan_schedules WHERE id = ?', (schedule_id,))
+    sched = cursor.fetchone()
+    if not sched:
         conn.close()
         abort(404)
+
+    # Stop running scan if any
+    from flask import current_app
+    scheduler = current_app.config.get('SCAN_SCHEDULER')
+    if scheduler and scheduler.is_source_running(sched['media_source_id']):
+        scheduler.stop_source(sched['media_source_id'])
+
     cursor.execute('DELETE FROM scan_schedules WHERE id = ?', (schedule_id,))
     conn.commit()
     conn.close()
+
+    if scheduler:
+        scheduler.reload()
+
     return jsonify({'ok': True})
 
 
