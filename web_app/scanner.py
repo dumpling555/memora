@@ -10,6 +10,7 @@ Uses ThreadPoolExecutor for parallel file stat() over SMB.
 import os
 import time
 import sqlite3
+import queue
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
@@ -35,9 +36,13 @@ def get_db():
     return conn
 
 
-def _walk_parallel(root, max_workers=8):
-    """Parallel scandir directory walk. Sibling directories scanned concurrently."""
-    import queue
+def _walk_parallel(root, max_workers=8, abort_event=None, dir_timeout=30):
+    """Parallel scandir directory walk. Sibling directories scanned concurrently.
+
+    abort_event: threading.Event — if set, walk stops early.
+    dir_timeout: seconds to wait for each directory result before giving up.
+                 Prevents permanent hang when NAS paths become unresponsive.
+    """
     q = queue.Queue()
     visited = set()
     pending = {os.path.normpath(root)}
@@ -63,7 +68,18 @@ def _walk_parallel(root, max_workers=8):
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         pool.submit(_scan, root)
         while len(visited) < len(pending):
-            path, dirs, files = q.get()
+            if abort_event and abort_event.is_set():
+                break
+            try:
+                path, dirs, files = q.get(timeout=dir_timeout)
+            except queue.Empty:
+                # A directory worker timed out (NAS unresponsive).
+                # Treat all still-pending directories as visited (empty) so
+                # the walk can terminate instead of hanging forever.
+                stuck = pending - visited
+                print(f'[scanner] _walk_parallel: {len(stuck)} dir(s) timed out after {dir_timeout}s, skipping: {list(stuck)[:5]}')
+                visited.update(stuck)
+                break
             visited.add(path)
             yield path, files  # files already filtered by extension
             for d in dirs:
@@ -78,12 +94,18 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
     with _scanner_lock:
         if source_id in _active_scan_sources:
             print(f"[scanner] Scan already running for source {source_id}, skipping duplicate request")
-            try:
-                conn = get_db()
-                _finish_scan(conn, log_id, 'cancelled', error_message='Another scan already running for this source')
-                conn.close()
-            except Exception:
-                pass
+            # Retry up to 3 times in case of a transient DB lock — a silent pass here
+            # would leave the log entry stuck in 'running' forever.
+            for _attempt in range(3):
+                try:
+                    conn = get_db()
+                    _finish_scan(conn, log_id, 'cancelled', error_message='Another scan already running for this source')
+                    conn.close()
+                    break
+                except Exception as _e:
+                    time.sleep(0.2)
+                    if _attempt == 2:
+                        print(f"[scanner] WARNING: could not mark log_id={log_id} as cancelled after 3 attempts: {_e}")
             return
         _active_scan_sources.add(source_id)
 
@@ -126,7 +148,7 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
         pending_inserts = []   # batched for batch insert
         pending_checks = []    # [(full_path, fname, ext), ...]
 
-        for dirpath, filenames in _walk_parallel(root):
+        for dirpath, filenames in _walk_parallel(root, abort_event=abort_event):
             for fname in filenames:
                 ext = os.path.splitext(fname)[1].lower()
 

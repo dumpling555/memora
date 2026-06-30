@@ -1,7 +1,12 @@
 """
-Independent quick scanner: runs incremental scan for ALL sources every 60s.
+Independent quick scanner: runs incremental scan for ALL sources every 30 minutes.
 Separate from scheduler — no schedule table dependency, no full scan.
+
+The longer interval is intentional: it allows NAS disks to spin down and sleep
+between scans, reducing wear and power consumption.
 """
+
+CYCLE_INTERVAL = 1800  # 30 minutes — long enough to let NAS disks sleep
 import os
 import time
 import sqlite3
@@ -14,7 +19,7 @@ DATABASE = os.path.join(_BASE, '..', 'res.sqlite')
 class QuickScanner:
     """Background thread that scans all sources every check_interval seconds."""
 
-    def __init__(self, check_interval=60):
+    def __init__(self, check_interval=CYCLE_INTERVAL):
         self.check_interval = check_interval
         self._running = False
         self._thread = None

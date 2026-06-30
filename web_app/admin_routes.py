@@ -424,7 +424,7 @@ def toggle_folder_visibility(source_id):
 # Store active scan threads to avoid duplicates
 _active_scans = {}  # {source_id: log_id}
 _scan_abort = {}    # {log_id: threading.Event()}
-_scan_lock = threading.Lock()
+_scan_lock = threading.RLock()
 
 
 def _start_scan(source_id, mode='incremental'):

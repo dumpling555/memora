@@ -174,7 +174,7 @@ def _init_scheduler(app_instance):
     from thumb_daemon import ThumbnailDaemon
     from analysis_daemon import AnalysisDaemon
     scheduler = ScanScheduler(check_interval=60)
-    qs = QuickScanner(check_interval=1800)  # Check every 30 minutes to allow NAS disks to sleep
+    qs = QuickScanner()  # 30-minute cycle, see quick_scanner.CYCLE_INTERVAL
     thumb_d = ThumbnailDaemon()
     thumb_d.start()
     app_instance.config['THUMB_DAEMON'] = thumb_d
