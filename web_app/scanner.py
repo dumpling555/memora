@@ -193,6 +193,12 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
                     conn.close()
                     return
 
+        if abort_event and abort_event.is_set():
+            _finish_scan(conn, log_id, 'cancelled', total, new, updated, skipped, deleted, errors,
+                         error_message='Cancelled by user')
+            conn.close()
+            return
+
         # Flush remaining batches
         if pending_inserts:
             new += _process_new_files_batch(pending_inserts, conn)

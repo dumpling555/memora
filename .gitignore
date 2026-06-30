@@ -67,3 +67,8 @@ docx_content.txt
 
 # Large models / binaries
 text2vec-base-chinese/
+quick_scan_issue.md
+test_results.json
+test_review.md
+test.md
+.agents/AGENTS.md
