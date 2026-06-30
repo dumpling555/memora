@@ -149,6 +149,12 @@ def _init_admin_db():
     except sqlite3.OperationalError:
         pass  # column already exists
 
+    # --- Migrate: add scan_mode column if older schema misses it ---
+    try:
+        c.execute("ALTER TABLE scan_log ADD COLUMN scan_mode TEXT DEFAULT 'quick_manual'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     conn.close()
 
 
@@ -182,11 +188,11 @@ def _init_scheduler(app_instance):
     analysis_d.start()
     app_instance.config['ANALYSIS_DAEMON'] = analysis_d
 
-    def _trigger_scan_fn(source_id, mode='incremental', abort_event=None):
+    def _trigger_scan_fn(source_id, mode='incremental', abort_event=None, scan_mode='full_schedule'):
         conn2 = sqlite3.connect(DATABASE)
         cur2 = conn2.cursor()
-        cur2.execute("INSERT INTO scan_log (media_source_id, status, started_at) VALUES (?, 'running', ?)",
-                     (source_id, time.strftime('%Y-%m-%d %H:%M:%S')))
+        cur2.execute("INSERT INTO scan_log (media_source_id, status, started_at, scan_mode) VALUES (?, 'running', ?, ?)",
+                     (source_id, time.strftime('%Y-%m-%d %H:%M:%S'), scan_mode))
         log_id = cur2.lastrowid
         conn2.commit()
         conn2.close()
@@ -195,10 +201,20 @@ def _init_scheduler(app_instance):
         if abort_event is None:
             abort_event = threading.Event()
 
+        # Register in admin_routes._active_scans so manual triggers detect conflicts
+        from admin_routes import _active_scans, _scan_abort, _scan_lock
+        with _scan_lock:
+            _active_scans[source_id] = log_id
+            _scan_abort[log_id] = abort_event
+
         def _scan_and_thumb():
             try:
-                scanner_run_scan(source_id, log_id, mode=mode, abort_event=abort_event)
+                scanner_run_scan(source_id, log_id, mode=mode, abort_event=abort_event, scan_mode=scan_mode)
             finally:
+                with _scan_lock:
+                    if _active_scans.get(source_id) == log_id:
+                        del _active_scans[source_id]
+                    _scan_abort.pop(log_id, None)
                 if not abort_event.is_set():
                     thumb_d.run_once(source_id)
                     analysis_d.run_once()

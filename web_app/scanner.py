@@ -89,7 +89,7 @@ def _walk_parallel(root, max_workers=8, abort_event=None, dir_timeout=30):
                     pool.submit(_scan, sub)
 
 
-def run_scan(source_id, log_id, mode='incremental', abort_event=None):
+def run_scan(source_id, log_id, mode='incremental', abort_event=None, scan_mode='quick_manual'):
     """Scan a media source and update image_analysis."""
     with _scanner_lock:
         if source_id in _active_scan_sources:
@@ -112,6 +112,13 @@ def run_scan(source_id, log_id, mode='incremental', abort_event=None):
     conn = get_db()
     cursor = conn.cursor()
     start_time = time.time()
+
+    # Write scan_mode to the log entry
+    try:
+        cursor.execute("UPDATE scan_log SET scan_mode = ? WHERE id = ?", (scan_mode, log_id))
+        conn.commit()
+    except Exception:
+        pass
 
     try:
         # 1. Get source info

@@ -144,7 +144,7 @@ def create_source():
         # Trigger an initial quick scan immediately in the background
         if is_active:
             try:
-                _start_scan(new_id, 'incremental')
+                _start_scan(new_id, 'incremental', scan_mode='quick_auto')
             except Exception as e:
                 print(f'[admin] failed to start initial scan for source {new_id}: {e}')
 
@@ -433,17 +433,20 @@ _scan_abort = {}    # {log_id: threading.Event()}
 _scan_lock = threading.RLock()
 
 
-def _start_scan(source_id, mode='incremental'):
+def _start_scan(source_id, mode='incremental', scan_mode=None):
     """Helper to programmatically start a scan thread for a source."""
+    if scan_mode is None:
+        scan_mode = 'full_manual' if mode == 'full' else 'quick_manual'
+
     conn = get_db()
     cursor = conn.cursor()
 
     # Create scan_log entry
     now = time.strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute("""
-        INSERT INTO scan_log (media_source_id, status, started_at)
-        VALUES (?, 'running', ?)
-    """, (source_id, now))
+        INSERT INTO scan_log (media_source_id, status, started_at, scan_mode)
+        VALUES (?, 'running', ?, ?)
+    """, (source_id, now, scan_mode))
     log_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -456,9 +459,9 @@ def _start_scan(source_id, mode='incremental'):
     # Launch background thread
     from scanner import run_scan
 
-    def _scan_wrapper(src_id, lid, evt, scan_mode):
+    def _scan_wrapper(src_id, lid, evt, scan_type, sm):
         try:
-            run_scan(src_id, lid, mode=scan_mode, abort_event=evt)
+            run_scan(src_id, lid, mode=scan_type, abort_event=evt, scan_mode=sm)
         finally:
             with _scan_lock:
                 if _active_scans.get(src_id) == lid:
@@ -478,7 +481,7 @@ def _start_scan(source_id, mode='incremental'):
             except Exception:
                 pass
 
-    thread = threading.Thread(target=_scan_wrapper, args=(source_id, log_id, event, mode),
+    thread = threading.Thread(target=_scan_wrapper, args=(source_id, log_id, event, mode, scan_mode),
                               daemon=True, name=f'scan-{source_id}')
     thread.start()
     return log_id
@@ -503,10 +506,21 @@ def trigger_scan(source_id):
     # Prevent duplicate scans for same source (check and start atomically)
     with _scan_lock:
         if source_id in _active_scans:
-            return jsonify({
-                'error': 'Scan already running for this source',
-                'scan_log_id': _active_scans[source_id]
-            }), 409
+            # Double-check: verify the scan is actually still running in DB
+            old_log_id = _active_scans[source_id]
+            conn2 = get_db()
+            cur2 = conn2.cursor()
+            cur2.execute('SELECT status FROM scan_log WHERE id = ?', (old_log_id,))
+            row = cur2.fetchone()
+            conn2.close()
+            if row and row['status'] == 'running':
+                return jsonify({
+                    'error': 'Scan already running for this source',
+                    'scan_log_id': old_log_id
+                }), 409
+            # Stale entry — clean up
+            del _active_scans[source_id]
+            _scan_abort.pop(old_log_id, None)
         log_id = _start_scan(source_id, mode)
 
     return jsonify({'scan_log_id': log_id, 'status': 'running', 'mode': mode}), 202
@@ -526,7 +540,9 @@ def get_scan_status(log_id):
 
 @admin_bp.route('/api/scan/active', methods=['GET'])
 def list_active_scans():
-    """Return currently running scan_log entries."""
+    """Return currently running scan_log entries.
+    Also includes scans that completed within the last 10 seconds so the
+    frontend can show cards for fast-completing scans."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -534,6 +550,9 @@ def list_active_scans():
         FROM scan_log sl
         LEFT JOIN media_sources ms ON sl.media_source_id = ms.id
         WHERE sl.status = 'running'
+           OR (sl.status IN ('completed','cancelled','failed')
+               AND sl.finished_at IS NOT NULL
+               AND sl.finished_at >= datetime('now', '-10 seconds'))
         ORDER BY sl.id DESC
     """)
     rows = [dict(r) for r in cursor.fetchall()]

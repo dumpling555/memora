@@ -84,19 +84,30 @@ class QuickScanner:
         try:
             from scanner import run_scan
             from thumb_daemon import ThumbnailDaemon
+            import threading
 
             conn = sqlite3.connect(DATABASE)
             c = conn.cursor()
             now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            abort_event = threading.Event()
             c.execute(
-                "INSERT INTO scan_log (media_source_id, status, started_at) VALUES (?, 'running', ?)",
+                "INSERT INTO scan_log (media_source_id, status, started_at, scan_mode) VALUES (?, 'running', ?, 'quick_auto')",
                 (src_id, now_str)
             )
             log_id = c.lastrowid
             conn.commit()
             conn.close()
 
-            run_scan(src_id, log_id, mode='incremental')
+            # Register in admin_routes._active_scans for conflict detection
+            try:
+                from admin_routes import _active_scans, _scan_abort, _scan_lock
+                with _scan_lock:
+                    _active_scans[src_id] = log_id
+                    _scan_abort[log_id] = abort_event
+            except Exception:
+                pass
+
+            run_scan(src_id, log_id, mode='incremental', scan_mode='quick_auto', abort_event=abort_event)
 
             td = ThumbnailDaemon()
             td.run_once(src_id)
@@ -105,3 +116,12 @@ class QuickScanner:
             print(f'[quick_scanner] scan failed for source {src_id}: {e}')
         finally:
             self._active_sources.discard(src_id)
+            # Clean up _active_scans
+            try:
+                from admin_routes import _active_scans, _scan_abort, _scan_lock
+                with _scan_lock:
+                    if _active_scans.get(src_id) == log_id:
+                        del _active_scans[src_id]
+                    _scan_abort.pop(log_id, None)
+            except Exception:
+                pass

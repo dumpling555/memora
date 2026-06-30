@@ -94,6 +94,59 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .toast { animation: slideIn 0.35s var(--spring), fadeOut 0.3s ease 2.7s forwards; }
 .overflow-y-auto, .tab-panel { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* Scan status card */
+.scan-card {
+    width: 240px;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.7);
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    animation: scanCardIn 0.4s var(--spring);
+    transition: all 0.3s ease;
+}
+html.dark .scan-card {
+    background: rgba(30,41,59,0.9);
+    border-color: #334155;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+@keyframes scanCardIn {
+    from { transform: translateX(120px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes arrowExit {
+    0%   { transform: translateX(0); opacity: 1; }
+    20%  { transform: translateX(-80px); opacity: 1; }
+    100% { transform: translateX(calc(100vw + 280px)); opacity: 0; }
+}
+.scan-card.arrow-exit {
+    animation: arrowExit 0.9s cubic-bezier(0.5, 0, 0.7, 0.2) forwards;
+}
+.scan-ring-track { stroke: #e2e8f0; }
+html.dark .scan-ring-track { stroke: #334155; }
+.scan-ring-spin {
+    stroke: #3b82f6;
+    stroke-linecap: round;
+    stroke-dasharray: 60 200;
+    transform-origin: center;
+    animation: ringRotate 1.4s linear infinite;
+}
+@keyframes ringRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.scan-ring-done {
+    stroke: #22c55e;
+    stroke-linecap: round;
+    stroke-dasharray: 251;
+    stroke-dashoffset: 0;
+    transform-origin: center;
+    transform: rotate(-90deg);
+    transition: stroke-dashoffset 0.6s ease;
+}
 </style>
 </head>
 <body>
@@ -145,6 +198,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
 
     <!-- Toast container -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- Scan status cards -->
+    <div id="scan-cards" class="fixed right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-3"></div>
 
     <!-- ============================================================ -->
     <!-- TAB 1: Media Sources -->
@@ -608,7 +664,7 @@ async function triggerScan(id, mode = 'incremental') {
     try {
         const activeResp = await fetch('/admin/api/scan/active');
         const active = await activeResp.json();
-        const sameSource = active.find(a => a.media_source_id === id);
+        const sameSource = active.find(a => a.media_source_id === id && a.status === 'running');
         if (sameSource) {
             showScanConflictModal(s.name, sameSource);
             return;
@@ -1092,6 +1148,193 @@ function esc(s) {
 }
 
 // ================================
+// Scan Status Cards
+// ================================
+let _currentCard = null;  // { el, logId, data, completedAt, timer }
+let _scanBaselineId = 0;  // ignore scans older than this (set on first poll)
+let _scanFirstPoll = true;
+let _dismissedScanId = 0;  // last scan whose card was dismissed
+const RING_R = 40;
+const RING_C = 2 * Math.PI * RING_R;
+
+function fmtElapsed(startedAt) {
+    if (!startedAt) return '00:00';
+    const ms = Date.now() - new Date(startedAt.replace(' ', 'T')).getTime();
+    if (ms < 0) return '00:00';
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0
+        ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+        : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function isFullMode(scanMode) {
+    return scanMode && scanMode.startsWith('full');
+}
+
+function scanModeLabel(scanMode) {
+    const labels = {
+        quick_manual: '手动快速扫描',
+        quick_auto: '自动快速扫描',
+        full_manual: '手动全量扫描',
+        full_schedule: '定时全量扫描'
+    };
+    return labels[scanMode] || scanMode || '扫描';
+}
+
+function createScanCard(scan) {
+    const card = document.createElement('div');
+    card.className = 'scan-card';
+    card.dataset.logId = scan.id;
+    const full = isFullMode(scan.scan_mode);
+
+    card.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0" style="width:56px;height:56px">
+                <svg width="56" height="56" viewBox="0 0 96 96">
+                    <circle class="scan-ring-track" cx="48" cy="48" r="${RING_R}" fill="none" stroke-width="5"/>
+                    <circle class="scan-ring-fg scan-ring-spin" cx="48" cy="48" r="${RING_R}" fill="none" stroke-width="5"/>
+                </svg>
+                <div class="scan-ring-center absolute inset-0 flex items-center justify-center">
+                    <i class="ri-loader-4-line text-blue-500 text-lg animate-spin"></i>
+                </div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-semibold text-slate-800 truncate">${esc(scan.source_name || 'Source')}</div>
+                <div class="text-[10px] text-slate-400 mt-0.5 scan-mode-label">${scanModeLabel(scan.scan_mode)}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5 scan-elapsed">${fmtElapsed(scan.started_at)}</div>
+            </div>
+        </div>
+        <div class="mt-2 flex gap-2.5 text-[11px] text-slate-500 scan-counts">
+            <span class="text-green-600">+<b class="cnt-new">${scan.new_files||0}</b></span>
+            <span class="text-blue-500">↑<b class="cnt-upd">${scan.updated_files||0}</b></span>
+            ${full ? `<span class="text-red-500">-<b class="cnt-del">${scan.deleted_files||0}</b></span>` : ''}
+            <span class="text-slate-400 ml-auto">∑<b class="cnt-total">${scan.total_files||0}</b></span>
+        </div>
+    `;
+
+    document.getElementById('scan-cards').appendChild(card);
+
+    const timer = setInterval(() => {
+        const el = card.querySelector('.scan-elapsed');
+        if (el) el.textContent = fmtElapsed(scan.started_at);
+    }, 1000);
+
+    _currentCard = { el: card, logId: scan.id, data: scan, completedAt: null, timer };
+}
+
+function updateScanCard(scan) {
+    if (!_currentCard) return;
+    const card = _currentCard.el;
+    card.querySelector('.cnt-new').textContent = scan.new_files || 0;
+    card.querySelector('.cnt-upd').textContent = scan.updated_files || 0;
+    const del = card.querySelector('.cnt-del');
+    if (del) del.textContent = scan.deleted_files || 0;
+    card.querySelector('.cnt-total').textContent = scan.total_files || 0;
+    _currentCard.data = scan;
+}
+
+function markScanComplete(scan) {
+    if (!_currentCard || _currentCard.completedAt) return;
+    _currentCard.completedAt = Date.now();
+
+    const card = _currentCard.el;
+    clearInterval(_currentCard.timer);
+
+    // Update ring: stop spinning, turn green
+    const fg = card.querySelector('.scan-ring-fg');
+    if (fg) {
+        fg.classList.remove('scan-ring-spin');
+        fg.classList.add('scan-ring-done');
+    }
+    // Update center icon: green checkmark
+    const center = card.querySelector('.scan-ring-center');
+    if (center) {
+        center.innerHTML = '<i class="ri-check-line text-green-500 text-xl"></i>';
+    }
+    // Update final counts
+    updateScanCard(scan);
+
+    // Arrow exit after 10 seconds
+    setTimeout(() => {
+        card.classList.add('arrow-exit');
+        card.addEventListener('animationend', () => {
+            card.remove();
+            _dismissedScanId = _currentCard ? _currentCard.logId : 0;
+            _currentCard = null;
+        });
+    }, 10000);
+}
+
+async function fetchScanData(logId) {
+    try {
+        const r = await fetch(`/admin/api/scan/${logId}`);
+        if (r.ok) return await r.json();
+    } catch (e) {}
+    return null;
+}
+
+async function pollScanCards() {
+    try {
+        const r = await fetch('/admin/api/scan/active');
+        if (!r.ok) return;
+        const scans = await r.json();
+
+        // First poll: record baseline (highest existing scan id), don't show cards
+        if (_scanFirstPoll) {
+            _scanFirstPoll = false;
+            if (scans.length > 0) {
+                _scanBaselineId = Math.max(...scans.map(s => s.id));
+            }
+            return;
+        }
+
+        // Filter to only scans newer than baseline and not dismissed
+        const newScans = scans.filter(s => s.id > _scanBaselineId && s.id > _dismissedScanId);
+
+        if (newScans.length === 0) {
+            // No new scans — if current card is still running, check if it vanished
+            if (_currentCard && !_currentCard.completedAt) {
+                const stillRunning = scans.find(s => s.id === _currentCard.logId && s.status === 'running');
+                if (!stillRunning) {
+                    const data = await fetchScanData(_currentCard.logId);
+                    if (data) markScanComplete(data);
+                    else markScanComplete({..._currentCard.data, status: 'completed'});
+                }
+            }
+            return;
+        }
+
+        // Pick the latest new scan (highest id)
+        const latest = newScans.reduce((a, b) => a.id > b.id ? a : b);
+
+        if (_currentCard && _currentCard.logId !== latest.id) {
+            // Different scan — remove old card immediately
+            clearInterval(_currentCard.timer);
+            _currentCard.el.remove();
+            _currentCard = null;
+        }
+
+        if (latest.status === 'running') {
+            if (_currentCard) {
+                updateScanCard(latest);
+            } else {
+                createScanCard(latest);
+            }
+        } else {
+            if (_currentCard) {
+                if (!_currentCard.completedAt) markScanComplete(latest);
+            } else {
+                createScanCard(latest);
+                markScanComplete(latest);
+            }
+        }
+    } catch (e) {}
+}
+
+// ================================
 // Init
 // ================================
 async function initPage() {
@@ -1100,6 +1343,8 @@ async function initPage() {
     updateLangIndicator(i18n.getLang());
     await fetchCsrfToken();
     loadSources();
+    setInterval(pollScanCards, 2000);
+    pollScanCards();
 }
 initPage();
 </script>
