@@ -67,6 +67,7 @@ docx_content.txt
 
 # Large models / binaries
 text2vec-base-chinese/
+bge-base-zh-v1.5/
 quick_scan_issue.md
 test_results.json
 test_review.md

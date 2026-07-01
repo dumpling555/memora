@@ -442,6 +442,9 @@ _init_scheduler(app)
 
 _build_thumb_map_wrapper()
 
+import embedding_helper
+embedding_helper.init_vector_cache(DATABASE)
+
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
@@ -483,7 +486,7 @@ def get_photos():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    sql = 'SELECT id, file_name, file_path, overview, tags, created_at, width, height, format FROM image_analysis WHERE 1=1'
+    sql = 'SELECT id, file_name, file_path, overview, extracted_text, other_info, tags, created_at, width, height, format FROM image_analysis WHERE 1=1'
     params = []
 
     # Hidden folders filter (always applied)
@@ -535,94 +538,71 @@ def get_photos():
         sql += ' AND SUBSTR(created_at, 1, 10) = ?'
         params.append(date_filter)
 
-    # Check if semantic search is available
+    # Semantic search using in-memory vector cache
     semantic_enabled = False
     query_vector = None
     if query:
         try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            import embedding_helper
             query_vector = embedding_helper.get_embedding(query)
-            if query_vector is not None:
-                # Check if there are any vectors in the database
-                c_test = conn.cursor()
-                c_test.execute("SELECT 1 FROM image_vectors LIMIT 1")
-                if c_test.fetchone():
-                    semantic_enabled = True
-                else:
-                    print("[Search] Semantic search disabled: image_vectors is empty.")
+            cache = embedding_helper.get_vector_cache()
+            if query_vector is not None and cache['count'] > 0:
+                semantic_enabled = True
+            elif cache['count'] == 0:
+                print("[Search] Semantic search disabled: vector cache is empty.")
         except Exception as e:
             print(f"[Search] Semantic search disabled: {e}")
 
     if query and semantic_enabled:
-        # Run base query to get all candidate photos matching current folder/date filters
-        # Note: We need overview, extracted_text, other_info, tags, file_name, file_path to do keyword check
+        # Get candidate IDs from SQL (folder/date/hidden filters already applied)
         cursor.execute(sql, params)
         candidates = cursor.fetchall()
-        
+
         if not candidates:
             conn.close()
             return jsonify([])
-            
-        candidate_ids = [r['id'] for r in candidates]
-        
-        # Load all embeddings for these candidates in chunks
-        embeddings_map = {}
-        chunk_size = 500
-        for i in range(0, len(candidate_ids), chunk_size):
-            chunk = candidate_ids[i:i+chunk_size]
-            placeholders = ','.join('?' for _ in chunk)
-            c_emb = conn.cursor()
-            c_emb.execute(f"SELECT image_id, embedding FROM image_vectors WHERE image_id IN ({placeholders})", chunk)
-            for r in c_emb.fetchall():
-                embeddings_map[r['image_id']] = r['embedding']
 
-        # Compute scores
-        scored_photos = []
         import numpy as np
-        norm_q = np.linalg.norm(query_vector)
+        cache = embedding_helper.get_vector_cache()
+        candidate_ids = set(r['id'] for r in candidates)
+
+        # Filter cache vectors to candidates only
+        mask = np.isin(cache['ids'], list(candidate_ids))
+        filtered_mat = cache['mat'][mask]
+        filtered_ids = cache['ids'][mask]
+        filtered_norms = cache['norms'][mask]
+
+        # Batch cosine similarity (vectorized, no loop)
+        norm_q = float(np.linalg.norm(query_vector))
+        if norm_q > 0 and len(filtered_ids) > 0:
+            similarities = filtered_mat @ query_vector / (filtered_norms * norm_q)
+        else:
+            similarities = np.zeros(len(filtered_ids))
+
+        sim_map = {int(fid): float(s) for fid, s in zip(filtered_ids, similarities)}
+
+        # Keyword match + scoring
+        scored_photos = []
         q_lower = query.lower()
-        
+
         for row in candidates:
             rid = row['id']
-            # 1. Cosine similarity
-            similarity = 0.0
-            if rid in embeddings_map and norm_q > 0:
-                try:
-                    emb_bytes = embeddings_map[rid]
-                    emb_vector = np.frombuffer(emb_bytes, dtype=np.float32)
-                    norm_e = np.linalg.norm(emb_vector)
-                    if norm_e > 0:
-                        similarity = float(np.dot(query_vector, emb_vector) / (norm_q * norm_e))
-                except Exception as e:
-                    print(f"[Search] Cosine similarity error for image {rid}: {e}")
-            
-            # 2. Keyword match bonus
+            similarity = sim_map.get(rid, 0.0)
+
+            # Keyword match across text fields
             is_keyword = False
-            # Check fields that might be None
-            fields_to_check = [
-                row['overview'],
-                row.keys() and 'extracted_text' in row.keys() and row['extracted_text'],
-                row.keys() and 'other_info' in row.keys() and row['other_info'],
-                row['tags'],
-                row['file_name'],
-                row['file_path']
-            ]
-            for field in fields_to_check:
+            for field in [row['overview'], row['extracted_text'], row['other_info'],
+                          row['tags'], row['file_name'], row['file_path']]:
                 if field and q_lower in str(field).lower():
                     is_keyword = True
                     break
-                
+
             score = similarity
             if is_keyword:
-                score += 1.5  # high bonus to put keyword matches first
-                
-            # Filter out non-matching/low similarity images
+                score += 1.5
+
             if not is_keyword and score < 0.35:
                 continue
-                
+
             scored_photos.append({
                 'id': row['id'],
                 'file_name': row['file_name'],
@@ -635,21 +615,18 @@ def get_photos():
                 'format': row['format'],
                 'score': score
             })
-            
-        # Sort by score DESC, then created_at DESC
+
         scored_photos.sort(key=lambda x: (x['score'], x['created_at']), reverse=True)
-        
-        # Apply limit
+
         max_limit = limit if limit else 500
         scored_photos = scored_photos[:max_limit]
-        
-        # Remove score key before returning
+
         for p in scored_photos:
             p.pop('score', None)
-            
+
         conn.close()
         return jsonify(scored_photos)
-        
+
     else:
         if query:
             sql += ' AND (overview LIKE ? OR extracted_text LIKE ? OR other_info LIKE ? OR tags LIKE ? OR file_name LIKE ? OR file_path LIKE ?)'

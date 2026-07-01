@@ -142,6 +142,13 @@ class AnalysisDaemon:
         analyzed_ids = [r[0] for r in results]
         print(f'[analysis_daemon] analyzed {len(analyzed_ids)} records')
 
+        # Rebuild vector cache to include newly generated vectors
+        try:
+            import embedding_helper
+            embedding_helper.rebuild_vector_cache(DATABASE)
+        except Exception as e:
+            print(f'[analysis_daemon] vector cache rebuild failed: {e}')
+
         # Generate tags for newly analyzed records
         try:
             rows = conn.execute(
