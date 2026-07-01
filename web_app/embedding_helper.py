@@ -31,9 +31,11 @@ def get_model():
             print(f"[Embedding] Loading BGE model from: {local_model_path}")
             _model = SentenceTransformer(local_model_path)
         else:
-            print(f"[Embedding] ERROR: BGE model not found at: {local_model_path}")
-            print("[Embedding] Please run the model download script first.")
-            raise FileNotFoundError(f"BGE model not found at {local_model_path}")
+            print(f"[Embedding] Local model not found, downloading BAAI/bge-base-zh-v1.5 ...")
+            _model = SentenceTransformer('BAAI/bge-base-zh-v1.5')
+            os.makedirs(local_model_path, exist_ok=True)
+            _model.save(local_model_path)
+            print(f"[Embedding] Model saved to: {local_model_path}")
     return _model
 
 
